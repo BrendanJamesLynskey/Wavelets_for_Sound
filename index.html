@@ -950,10 +950,12 @@ details[open] summary::before{transform:rotate(90deg)}
 
   <h3>Cross-synthesis</h3>
   <p>
-    The most striking demonstration: take the magnitude from one sound's wavelet transform
-    and the phase from another's, then reconstruct. The result has the timbral "shape"
-    of the first sound imposed on the temporal structure of the second —
-    a form of spectral morphing that predates modern vocoder techniques.
+    The most striking demonstration: take the spectral envelope from one sound
+    and impose it on another. The result carries the timbral "shape"
+    of the first sound — its formants, resonances, vowel identity — while retaining
+    the temporal structure and pitch of the second.
+    Try "Speech (counting)" with "Rain/texture" for the classic talking-rain effect,
+    or swap magnitude and phase to hear rain that whispers words.
   </p>
 
   <div class="viz">
@@ -961,27 +963,28 @@ details[open] summary::before{transform:rotate(90deg)}
     <div class="controls">
       <label>Magnitude from
         <select id="crossSynthA">
-          <option value="speech">Speech (vowel sequence)</option>
-          <option value="flute">Flute (sustained tone)</option>
-          <option value="bell">Bell (inharmonic ring)</option>
-          <option value="chord">Organ chord (rich spectrum)</option>
+          <option value="speech" selected>Speech (counting)</option>
+          <option value="stringpad">String pad (rich chord)</option>
+          <option value="drums">Drum pattern (kick-snare-hat)</option>
+          <option value="bird">Bird calls (chirps)</option>
         </select>
       </label>
       <label>Phase from
         <select id="crossSynthB">
-          <option value="arpeggio">Piano arpeggio (pitched rhythm)</option>
-          <option value="bell">Bell (sharp attack)</option>
-          <option value="flute">Flute (sustained tone)</option>
-          <option value="speech">Speech (vowel sequence)</option>
+          <option value="rain" selected>Rain/texture (broadband noise)</option>
+          <option value="bowed">Bowed string (sustained)</option>
+          <option value="speech">Speech (counting)</option>
+          <option value="drums">Drum pattern (kick-snare-hat)</option>
         </select>
       </label>
       <label>Blend <input type="range" id="crossBlend" min="0" max="1" value="1" step="0.05"> <span id="crossBlendVal">100% A-mag</span></label>
-      <button id="playCrossA">♪ Magnitude source</button>
-      <button id="playCrossB">♪ Phase source</button>
-      <button id="playCrossHybrid">♪ Cross-synthesis (STFT)</button>
-      <button id="playCrossWavelet">♪ Cross-synthesis (CWT)</button>
+      <button id="playCrossA">&#9834; Magnitude source</button>
+      <button id="playCrossB">&#9834; Phase source</button>
+      <button id="playCrossHybrid">&#9834; Cross-synthesis (STFT)</button>
+      <button id="playCrossEnvelope">&#9834; Cross-synthesis (Envelope)</button>
+      <button id="playCrossWavelet">&#9834; Cross-synthesis (CWT)</button>
     </div>
-    <div class="viz-caption">Top: magnitude source scalogram · Middle: hybrid |W_A| × phase(W_B) · Bottom: phase source scalogram — the hybrid inherits the timbre of A and the pitch/rhythm of B · Two synthesis methods: STFT (fast, high fidelity) and CWT (Kronland-Martinet's original wavelet-domain approach)</div>
+    <div class="viz-caption">Top: magnitude source scalogram · Middle: hybrid |W_A| × phase(W_B) · Bottom: phase source scalogram — three methods: STFT (raw magnitude swap), Envelope (cepstral smoothing for cleaner formant transfer), CWT (Kronland-Martinet's original wavelet-domain approach)</div>
   </div>
 </section>
 
@@ -3475,6 +3478,7 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   const playABtn = document.getElementById('playCrossA');
   const playBBtn = document.getElementById('playCrossB');
   const playHybridBtn = document.getElementById('playCrossHybrid');
+  const playEnvelopeBtn = document.getElementById('playCrossEnvelope');
 
   const N = 256;
   const S = 32;
@@ -3487,70 +3491,129 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     const sig = new Float32Array(N);
     switch (type) {
       case 'speech': {
-        // Vowel sequence with formant transitions (viz-domain)
-        const vowels = [
-          { f0: 5, formants: [1,3,5], dur: 0.3 },
-          { f0: 6, formants: [2,4,6], dur: 0.3 },
-          { f0: 5, formants: [1,2,5], dur: 0.4 }
+        // "one-two-three-four" — 6 vowel segments with varying F0 and brief noise bursts
+        const segs = [
+          { f0: 5, formants: [1,3,5], start: 0.00, end: 0.14 },   // "w-uh"
+          { f0: 5.5, formants: [1,2.5,5], start: 0.14, end: 0.22 }, // "n"
+          { f0: 6, formants: [2,4.5,6], start: 0.25, end: 0.42 },   // "t-oo"
+          { f0: 5.5, formants: [1.5,3,5.5], start: 0.46, end: 0.62 }, // "th-r-ee"
+          { f0: 6.5, formants: [2,5,7], start: 0.62, end: 0.76 },   // "ee"
+          { f0: 5, formants: [1,2,4.5], start: 0.80, end: 0.97 }    // "f-or"
         ];
-        let phase = 0, tOff = 0;
-        for (let i = 0; i < N; i++) {
-          const t = i / N;
-          let vi = 0; let accDur = 0;
-          for (let v = 0; v < vowels.length; v++) { accDur += vowels[v].dur; if (t < accDur) { vi = v; break; } }
-          const vow = vowels[vi];
-          const localT = t - (vi === 0 ? 0 : vowels.slice(0,vi).reduce((s,v)=>s+v.dur,0));
-          const env = Math.min(1, localT/0.03) * (1 - Math.exp(-localT*30));
-          phase += 2*Math.PI*vow.f0/N;
-          for (const fh of vow.formants)
-            sig[i] += env * (1/fh) * Math.sin(phase * fh) * Math.exp(-localT*2);
-        }
-        break;
-      }
-      case 'flute': {
         let phase = 0;
         for (let i = 0; i < N; i++) {
           const t = i / N;
-          phase += 2*Math.PI*8/N;
-          const env = Math.pow(Math.min(t/0.12,1),2) * Math.exp(-0.5*t);
-          for (let h = 1; h <= 6; h++)
-            sig[i] += (1/h) * env * Math.exp(-h*0.3*t) * Math.sin(phase*h);
+          // noise bursts at consonant boundaries
+          if ((t > 0.22 && t < 0.25) || (t > 0.42 && t < 0.46) || (t > 0.76 && t < 0.80))
+            sig[i] += 0.3 * (Math.random() - 0.5);
+          for (const seg of segs) {
+            if (t >= seg.start && t < seg.end) {
+              const localT = (t - seg.start) / (seg.end - seg.start);
+              const env = Math.min(1, localT / 0.08) * Math.min(1, (1 - localT) / 0.08);
+              phase += 2 * Math.PI * seg.f0 / N;
+              for (const fh of seg.formants)
+                sig[i] += env * (1 / fh) * Math.sin(phase * fh);
+              break;
+            }
+          }
         }
         break;
       }
-      case 'bell': {
-        const ratios = [1, 2.09, 3.0, 4.16, 5.43];
+      case 'stringpad': {
+        // String ensemble chord with slow vibrato and slight detuning
+        const voices = [
+          { f: 5, detune: 0.03, vibRate: 0.7 },
+          { f: 6.3, detune: -0.02, vibRate: 0.9 },
+          { f: 7.5, detune: 0.04, vibRate: 0.6 },
+          { f: 10, detune: -0.03, vibRate: 0.8 }
+        ];
         for (let i = 0; i < N; i++) {
           const t = i / N;
-          for (let h = 0; h < ratios.length; h++)
-            sig[i] += (1/(h+1)) * Math.exp(-(h+1)*3*t) * (1-Math.exp(-t*80)) * Math.sin(2*Math.PI*7*ratios[h]*t);
+          const env = Math.min(1, t / 0.08) * Math.min(1, (1 - t) / 0.05);
+          for (const v of voices) {
+            const freq = v.f + v.detune + 0.15 * Math.sin(2 * Math.PI * v.vibRate * t);
+            for (let h = 1; h <= 6; h++)
+              sig[i] += env * (0.2 / h) * Math.sin(2 * Math.PI * freq * h * t);
+          }
         }
         break;
       }
-      case 'chord': {
-        // Rich organ chord (C-E-G-C')
-        const freqs = [6, 7.5, 9, 12];
-        for (let i = 0; i < N; i++) {
-          const t = i / N;
-          const env = Math.min(1, t/0.05) * Math.exp(-0.3*t);
-          for (const f of freqs)
-            for (let h = 1; h <= 4; h++)
-              sig[i] += env * (0.3/h) * Math.sin(2*Math.PI*f*h*t);
+      case 'drums': {
+        // 4-beat kick-snare pattern, repeated 2x
+        for (let rep = 0; rep < 2; rep++) {
+          const base = rep * 0.5;
+          for (let i = 0; i < N; i++) {
+            const t = i / N - base;
+            if (t < 0 || t >= 0.5) continue;
+            // Kick at 0, 0.25
+            for (const kOff of [0, 0.25]) {
+              const kt = t - kOff;
+              if (kt >= 0 && kt < 0.12) {
+                const kenv = Math.exp(-kt * 40);
+                sig[i] += kenv * 0.7 * Math.sin(2 * Math.PI * (3 + 6 * Math.exp(-kt * 30)) * kt * N);
+              }
+            }
+            // Snare at 0.125, 0.375
+            for (const sOff of [0.125, 0.375]) {
+              const st = t - sOff;
+              if (st >= 0 && st < 0.08) {
+                sig[i] += Math.exp(-st * 50) * 0.4 * (Math.random() - 0.5);
+                sig[i] += Math.exp(-st * 35) * 0.3 * Math.sin(2 * Math.PI * 12 * st * N);
+              }
+            }
+            // Hi-hat at every 0.0625
+            for (let hh = 0; hh < 8; hh++) {
+              const ht = t - hh * 0.0625;
+              if (ht >= 0 && ht < 0.03)
+                sig[i] += Math.exp(-ht * 100) * 0.15 * (Math.random() - 0.5);
+            }
+          }
         }
         break;
       }
-      case 'arpeggio': {
-        // Rapid note sequence
-        const notes = [8, 10, 12, 15, 12, 10, 8, 10];
-        let phase = 0;
+      case 'bird': {
+        // 4 chirps with fast frequency sweeps and pauses
+        const chirps = [
+          { start: 0.05, end: 0.15, fLow: 15, fHigh: 30 },
+          { start: 0.25, end: 0.33, fLow: 18, fHigh: 35 },
+          { start: 0.45, end: 0.52, fLow: 20, fHigh: 28 },
+          { start: 0.65, end: 0.80, fLow: 12, fHigh: 32 }
+        ];
         for (let i = 0; i < N; i++) {
           const t = i / N;
-          const ni = Math.min(Math.floor(t * notes.length), notes.length-1);
-          const nt = (t * notes.length) % 1;
-          phase += 2*Math.PI*notes[ni]/N;
-          const env = (1-Math.exp(-nt*40)) * Math.exp(-nt*6);
-          for (let h = 1; h <= 4; h++)
-            sig[i] += env * (1/h) * Math.sin(phase*h);
+          for (const c of chirps) {
+            if (t >= c.start && t < c.end) {
+              const lt = (t - c.start) / (c.end - c.start);
+              const env = Math.sin(Math.PI * lt);
+              const freq = c.fLow + (c.fHigh - c.fLow) * lt;
+              sig[i] += env * 0.6 * Math.sin(2 * Math.PI * freq * t);
+              sig[i] += env * 0.2 * Math.sin(2 * Math.PI * freq * 2.02 * t);
+              break;
+            }
+          }
+        }
+        break;
+      }
+      case 'rain': {
+        // Broadband noise with gentle amplitude modulation (rain drops)
+        for (let i = 0; i < N; i++) {
+          const t = i / N;
+          const am = 0.5 + 0.5 * Math.sin(2 * Math.PI * 6 * t) * Math.sin(2 * Math.PI * 2.3 * t);
+          sig[i] = am * (Math.random() - 0.5) * 0.8;
+        }
+        break;
+      }
+      case 'bowed': {
+        // Sustained bowed string with rich harmonics and bow-pressure variation
+        for (let i = 0; i < N; i++) {
+          const t = i / N;
+          const env = Math.min(1, t / 0.06) * Math.min(1, (1 - t) / 0.04);
+          const bowPressure = 0.7 + 0.3 * Math.sin(2 * Math.PI * 1.3 * t);
+          const f0 = 7 + 0.15 * Math.sin(2 * Math.PI * 0.8 * t); // vibrato
+          for (let h = 1; h <= 10; h++) {
+            const hAmp = (h % 2 === 1 ? 1.0 : 0.5) / h;
+            sig[i] += env * bowPressure * hAmp * Math.sin(2 * Math.PI * f0 * h * t);
+          }
         }
         break;
       }
@@ -3628,43 +3691,73 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   blendSlider.addEventListener('input', draw);
   window.addEventListener('resize', draw);
 
-  // ── Audio: realistic source sounds (2.5s, more interesting) ──
-  const crossDur = 2.5;
+  // ── Audio: realistic source sounds (3s, diverse and impressive) ──
+  const crossDur = 3.0;
   const crossSr = 44100;
 
-  function synthSpeechAudio() {
-    // Vowel sequence "ah-ee-oh" — built from glottal source + one formant pass
+  function synthSpeechCountingAudio() {
+    // "one-two-three-four" — 6 vowel segments with consonant noise bursts, prosody
     const sr = crossSr, dur = crossDur;
     const Na = Math.floor(sr * dur);
     const out = new Float32Array(Na);
 
-    // Three vowels, continuous (no gaps), with smooth crossfades
-    const vowels = [
-      { s: 0,   e: 0.9,  f0: 150, fmt: [{f:800,bw:80,g:1},{f:1200,bw:100,g:0.7},{f:2500,bw:150,g:0.35}] },
-      { s: 0.75, e: 1.85, f0: 170, fmt: [{f:270,bw:60,g:1},{f:2300,bw:150,g:0.5},{f:3000,bw:200,g:0.3}] },
-      { s: 1.7,  e: 2.5,  f0: 140, fmt: [{f:500,bw:70,g:1},{f:900,bw:100,g:0.6},{f:2300,bw:150,g:0.3}] }
+    // Segments: each word gets vowel nucleus + brief noise-burst consonants
+    const words = [
+      // "one": w(noise) + uh(vowel) + n(nasal)
+      { s: 0.0, e: 0.18, f0: 140, fmt: [{f:640,bw:70,g:1},{f:1200,bw:90,g:0.7},{f:2400,bw:130,g:0.35}] },
+      { s: 0.18, e: 0.55, f0: 150, fmt: [{f:640,bw:70,g:1},{f:1200,bw:90,g:0.7},{f:2400,bw:130,g:0.35}] },
+      // "two": t(noise) + oo(vowel)
+      { s: 0.65, e: 1.2, f0: 165, fmt: [{f:310,bw:60,g:1},{f:870,bw:80,g:0.5},{f:2250,bw:140,g:0.25}] },
+      // "three": th(noise) + ee(vowel)
+      { s: 1.35, e: 1.95, f0: 155, fmt: [{f:270,bw:50,g:1},{f:2300,bw:120,g:0.6},{f:3000,bw:170,g:0.3}] },
+      // "four": f(noise) + or(vowel)
+      { s: 2.15, e: 2.85, f0: 135, fmt: [{f:500,bw:65,g:1},{f:900,bw:85,g:0.6},{f:2300,bw:140,g:0.3}] }
+    ];
+    // Consonant noise bursts
+    const noises = [
+      { s: 0.0, e: 0.05, gain: 0.15 },   // w
+      { s: 0.55, e: 0.65, gain: 0.08 },   // n
+      { s: 0.60, e: 0.68, gain: 0.25 },   // t (plosive)
+      { s: 1.25, e: 1.38, gain: 0.20 },   // th (fricative)
+      { s: 2.05, e: 2.18, gain: 0.22 }    // f (fricative)
     ];
 
-    for (const vow of vowels) {
+    // Noise bursts
+    for (const nb of noises) {
+      const i0 = Math.floor(nb.s * sr), i1 = Math.min(Math.floor(nb.e * sr), Na);
+      for (let i = i0; i < i1; i++) {
+        const lt = (i - i0) / (i1 - i0);
+        const env = Math.sin(Math.PI * lt);
+        out[i] += nb.gain * env * (Math.random() - 0.5);
+      }
+    }
+
+    // Vowel segments via glottal source + formant filtering
+    for (const vow of words) {
       const segLen = Math.floor((vow.e - vow.s) * sr);
       const source = new Float32Array(segLen);
-      for (let h = 1; h <= 25; h++) {
+      // Glottal source: sum of harmonics with 1/h^2 rolloff + slight jitter
+      for (let h = 1; h <= 30; h++) {
         const fh = vow.f0 * h;
         if (fh > sr / 2) break;
         const srcAmp = 1 / (h * h);
         for (let i = 0; i < segLen; i++) {
           const t = i / sr;
           const segDur = vow.e - vow.s;
-          // Smooth crossfade envelope: 80ms fade-in and fade-out
-          const env = Math.min(1, t / 0.08) * Math.min(1, (segDur - t) / 0.08);
-          source[i] += srcAmp * env * Math.sin(2 * Math.PI * fh * t);
+          const env = Math.min(1, t / 0.04) * Math.min(1, (segDur - t) / 0.04);
+          // Slight F0 variation (prosody)
+          const f0Var = vow.f0 * (1 + 0.03 * Math.sin(2 * Math.PI * 4 * t));
+          source[i] += srcAmp * env * Math.sin(2 * Math.PI * f0Var * h * t);
         }
       }
+      // Apply each formant as a bandpass filter
       const filtered = new Float32Array(segLen);
       for (const fmt of vow.fmt) {
         const w0 = 2 * Math.PI * fmt.f / sr;
-        const alpha = Math.sin(w0) * Math.sinh(Math.log(2) / 2 * (fmt.bw / fmt.f) * w0 / Math.sin(w0));
-        const b0 = alpha * fmt.g, a1 = -2 * Math.cos(w0), a2 = 1 - alpha, norm = 1 + alpha;
+        const sinW0 = Math.sin(w0);
+        const cosW0 = Math.cos(w0);
+        const alpha = sinW0 * Math.sinh(Math.log(2) / 2 * (fmt.bw / fmt.f) * w0 / sinW0);
+        const b0 = alpha * fmt.g, a1 = -2 * cosW0, a2 = 1 - alpha, norm = 1 + alpha;
         let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
         for (let i = 0; i < segLen; i++) {
           const x0 = source[i];
@@ -3683,51 +3776,185 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     return out;
   }
 
-  function synthArpeggioAudio() {
-    // Piano arpeggio: C4-E4-G4-C5-G4-E4-C4 (rapid, each ~0.35s)
-    const sr = crossSr;
-    const notes = [262, 330, 392, 523, 392, 330, 262];
-    const noteDur = crossDur / notes.length;
-    const Na = Math.floor(sr * crossDur);
-    const out = new Float32Array(Na);
-    for (let ni = 0; ni < notes.length; ni++) {
-      const seg = synthPiano(notes[ni], noteDur + 0.3, sr);
-      const offset = Math.floor(ni * noteDur * sr);
-      for (let i = 0; i < seg.length && offset+i < Na; i++)
-        out[offset+i] += seg[i];
-    }
-    return out;
-  }
-
-  function synthChordAudio() {
-    // Rich organ chord C3-E3-G3-C4 sustained
+  function synthStringPadAudio() {
+    // String ensemble chord C3-E3-G3-C4 with detuning, vibrato, many harmonics
     const sr = crossSr, dur = crossDur;
     const Na = Math.floor(sr * dur);
     const out = new Float32Array(Na);
-    const freqs = [131, 165, 196, 262];
-    for (const f0 of freqs) {
-      for (let h = 1; h <= 8; h++) {
-        const fh = f0 * h;
-        if (fh > sr/2) break;
-        for (let i = 0; i < Na; i++) {
-          const t = i / sr;
-          const env = Math.min(1, t/0.05) * Math.exp(-0.3*t) * (0.6 + 0.4*Math.exp(-t));
-          out[i] += 0.012 * (1/h) * env * Math.sin(2*Math.PI*fh*t);
+    const voices = [
+      { f0: 131, detune: 0.7, vibRate: 4.8, vibDepth: 1.5 },
+      { f0: 131, detune: -0.5, vibRate: 5.2, vibDepth: 1.2 },  // doubled C3
+      { f0: 165, detune: 0.9, vibRate: 5.0, vibDepth: 1.8 },
+      { f0: 196, detune: -0.6, vibRate: 4.5, vibDepth: 1.4 },
+      { f0: 262, detune: 0.8, vibRate: 5.3, vibDepth: 1.6 },
+      { f0: 262, detune: -0.4, vibRate: 4.9, vibDepth: 1.1 }   // doubled C4
+    ];
+    for (const v of voices) {
+      const phases = new Float32Array(12);
+      for (let i = 0; i < Na; i++) {
+        const t = i / sr;
+        const env = Math.min(1, t / 0.15) * Math.min(1, (dur - t) / 0.1) *
+                    (0.7 + 0.3 * Math.sin(2 * Math.PI * 0.4 * t)); // slow swell
+        const freq = v.f0 + v.detune + v.vibDepth * Math.sin(2 * Math.PI * v.vibRate * t);
+        for (let h = 1; h <= 12; h++) {
+          const fh = freq * h;
+          if (fh > sr / 2) break;
+          phases[h - 1] += 2 * Math.PI * fh / sr;
+          const hAmp = (1 / h) * Math.exp(-h * 0.08);
+          out[i] += 0.02 * env * hAmp * Math.sin(phases[h - 1]);
         }
       }
     }
+    let mx = 0;
+    for (let i = 0; i < Na; i++) if (Math.abs(out[i]) > mx) mx = Math.abs(out[i]);
+    if (mx > 0) for (let i = 0; i < Na; i++) out[i] = out[i] / mx * 0.8;
+    return out;
+  }
+
+  function synthDrumPatternAudio() {
+    // 4-beat kick-snare-hat pattern, repeated 2x for ~3s
+    const sr = crossSr, dur = crossDur;
+    const Na = Math.floor(sr * dur);
+    const out = new Float32Array(Na);
+    const beatDur = dur / 8; // 8 eighth notes for 2 bars
+
+    for (let beat = 0; beat < 8; beat++) {
+      const beatStart = beat * beatDur;
+      const iStart = Math.floor(beatStart * sr);
+
+      // Kick on beats 0, 2, 4, 6 (quarter notes)
+      if (beat % 2 === 0) {
+        for (let i = 0; i < Math.floor(0.2 * sr) && iStart + i < Na; i++) {
+          const t = i / sr;
+          const kickEnv = Math.exp(-t * 25);
+          const kickFreq = 50 + 120 * Math.exp(-t * 40); // pitch sweep down
+          out[iStart + i] += 0.7 * kickEnv * Math.sin(2 * Math.PI * kickFreq * t);
+          // Click transient
+          if (t < 0.003) out[iStart + i] += 0.5 * (1 - t / 0.003) * Math.sin(2 * Math.PI * 3500 * t);
+        }
+      }
+      // Snare on beats 1, 3, 5, 7 (quarter note off-beats)
+      if (beat % 2 === 1) {
+        for (let i = 0; i < Math.floor(0.15 * sr) && iStart + i < Na; i++) {
+          const t = i / sr;
+          const snrEnv = Math.exp(-t * 30);
+          // Body
+          out[iStart + i] += 0.35 * snrEnv * Math.sin(2 * Math.PI * 200 * t);
+          // Noise rattle
+          out[iStart + i] += 0.4 * snrEnv * (Math.random() - 0.5);
+        }
+      }
+      // Hi-hat on every eighth note
+      for (let i = 0; i < Math.floor(0.04 * sr) && iStart + i < Na; i++) {
+        const t = i / sr;
+        const hhEnv = Math.exp(-t * 90);
+        // High-passed noise
+        out[iStart + i] += 0.15 * hhEnv * (Math.random() - 0.5);
+      }
+    }
+    let mx = 0;
+    for (let i = 0; i < Na; i++) if (Math.abs(out[i]) > mx) mx = Math.abs(out[i]);
+    if (mx > 0) for (let i = 0; i < Na; i++) out[i] = out[i] / mx * 0.8;
+    return out;
+  }
+
+  function synthBirdCallsAudio() {
+    // 4 chirps using FM synthesis with fast frequency sweeps
+    const sr = crossSr, dur = crossDur;
+    const Na = Math.floor(sr * dur);
+    const out = new Float32Array(Na);
+    const chirps = [
+      { s: 0.15, e: 0.55, fStart: 2200, fEnd: 3800, modDepth: 400, modRate: 35 },
+      { s: 0.75, e: 1.05, fStart: 3000, fEnd: 4500, modDepth: 300, modRate: 40 },
+      { s: 1.35, e: 1.60, fStart: 2800, fEnd: 3500, modDepth: 500, modRate: 30 },
+      { s: 1.90, e: 2.45, fStart: 1800, fEnd: 4200, modDepth: 350, modRate: 45 }
+    ];
+    for (const c of chirps) {
+      let phase = 0;
+      const i0 = Math.floor(c.s * sr), i1 = Math.min(Math.floor(c.e * sr), Na);
+      for (let i = i0; i < i1; i++) {
+        const t = (i - i0) / sr;
+        const lt = (i - i0) / (i1 - i0);
+        const env = Math.sin(Math.PI * lt) * Math.pow(Math.sin(Math.PI * lt), 0.3);
+        const freq = c.fStart + (c.fEnd - c.fStart) * lt + c.modDepth * Math.sin(2 * Math.PI * c.modRate * t);
+        phase += 2 * Math.PI * freq / sr;
+        out[i] += 0.5 * env * Math.sin(phase);
+        out[i] += 0.15 * env * Math.sin(phase * 2.01); // slight harmonic
+      }
+    }
+    let mx = 0;
+    for (let i = 0; i < Na; i++) if (Math.abs(out[i]) > mx) mx = Math.abs(out[i]);
+    if (mx > 0) for (let i = 0; i < Na; i++) out[i] = out[i] / mx * 0.8;
+    return out;
+  }
+
+  function synthRainTextureAudio() {
+    // Broadband noise with amplitude-modulated "drops" — ideal cross-synthesis carrier
+    const sr = crossSr, dur = crossDur;
+    const Na = Math.floor(sr * dur);
+    const out = new Float32Array(Na);
+    // Base: white noise
+    for (let i = 0; i < Na; i++) out[i] = (Math.random() - 0.5);
+    // Gentle low-pass via simple averaging to give texture
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = Na - 1; i > 0; i--)
+        out[i] = 0.7 * out[i] + 0.3 * out[i - 1];
+    }
+    // Amplitude modulation: gentle pattering with multiple rates
+    for (let i = 0; i < Na; i++) {
+      const t = i / sr;
+      const am = 0.3 + 0.25 * Math.sin(2 * Math.PI * 3.7 * t)
+               + 0.20 * Math.sin(2 * Math.PI * 7.1 * t)
+               + 0.15 * Math.sin(2 * Math.PI * 13.3 * t)
+               + 0.10 * Math.abs(Math.sin(2 * Math.PI * 1.2 * t));
+      out[i] *= am;
+    }
+    let mx = 0;
+    for (let i = 0; i < Na; i++) if (Math.abs(out[i]) > mx) mx = Math.abs(out[i]);
+    if (mx > 0) for (let i = 0; i < Na; i++) out[i] = out[i] / mx * 0.8;
+    return out;
+  }
+
+  function synthBowedStringAudio() {
+    // Sustained bowed cello-like tone with rich harmonics and bow pressure variation
+    const sr = crossSr, dur = crossDur;
+    const Na = Math.floor(sr * dur);
+    const out = new Float32Array(Na);
+    const f0Base = 196; // G3
+    const phases = new Float32Array(20);
+    for (let i = 0; i < Na; i++) {
+      const t = i / sr;
+      const env = Math.min(1, t / 0.08) * Math.min(1, (dur - t) / 0.06);
+      // Bow pressure modulation: slow, expressive
+      const bowPressure = 0.6 + 0.4 * Math.sin(2 * Math.PI * 0.7 * t) *
+                          (0.8 + 0.2 * Math.sin(2 * Math.PI * 2.1 * t));
+      const vibrato = 5.5 * Math.sin(2 * Math.PI * 5.5 * t) * Math.min(1, t / 0.3);
+      const f0 = f0Base + vibrato;
+      for (let h = 1; h <= 16; h++) {
+        const fh = f0 * h;
+        if (fh > sr / 2) break;
+        phases[h - 1] += 2 * Math.PI * fh / sr;
+        // Bowed string: odd harmonics stronger (sawtooth-ish but with bow character)
+        const hAmp = (1 / h) * (h % 2 === 1 ? 1.0 : 0.6) * Math.exp(-h * 0.04);
+        out[i] += env * bowPressure * hAmp * Math.sin(phases[h - 1]) * 0.08;
+      }
+    }
+    let mx = 0;
+    for (let i = 0; i < Na; i++) if (Math.abs(out[i]) > mx) mx = Math.abs(out[i]);
+    if (mx > 0) for (let i = 0; i < Na; i++) out[i] = out[i] / mx * 0.8;
     return out;
   }
 
   function makeAudioForType(type) {
     const sr = crossSr, dur = crossDur;
     switch(type) {
-      case 'speech':   return synthSpeechAudio();
-      case 'flute':    return synthFlute(330, dur, sr);
-      case 'bell':     return synthBell(440, dur, sr);
-      case 'chord':    return synthChordAudio();
-      case 'arpeggio': return synthArpeggioAudio();
-      default:         return new Float32Array(Math.floor(sr*dur));
+      case 'speech':    return synthSpeechCountingAudio();
+      case 'stringpad': return synthStringPadAudio();
+      case 'drums':     return synthDrumPatternAudio();
+      case 'bird':      return synthBirdCallsAudio();
+      case 'rain':      return synthRainTextureAudio();
+      case 'bowed':     return synthBowedStringAudio();
+      default:          return new Float32Array(Math.floor(sr * dur));
     }
   }
 
@@ -3799,6 +4026,106 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
       playBuffer(out, crossSr);
     } catch(e) {
       console.error('STFT cross-synthesis error:', e);
+    }
+  });
+
+  // ── Spectral Envelope cross-synthesis (cepstral smoothing) ──
+  // Much cleaner than raw magnitude swap: extracts spectral envelope via
+  // cepstral liftering, flattens carrier, then applies source envelope.
+  playEnvelopeBtn.addEventListener('click', () => {
+    const _audioCtx = getAudioCtx();
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
+    try {
+      const blend = parseFloat(blendSlider.value);
+      const sigA = makeAudioForType(selA.value);
+      const sigB = makeAudioForType(selB.value);
+      const Na = Math.max(sigA.length, sigB.length);
+      const fftSize = 2048;
+      const hop = fftSize / 4;
+      const numFrames = Math.max(1, Math.floor((Na - fftSize) / hop) + 1);
+      const lifterOrder = 30; // cepstral coefficients to keep for envelope
+
+      const win = new Float32Array(fftSize);
+      for (let n = 0; n < fftSize; n++) win[n] = 0.5 - 0.5 * Math.cos(2 * Math.PI * n / fftSize);
+
+      const out = new Float32Array(Na);
+
+      for (let f = 0; f < numFrames; f++) {
+        const off = f * hop;
+        const rA = new Float32Array(fftSize), iA = new Float32Array(fftSize);
+        const rB = new Float32Array(fftSize), iB = new Float32Array(fftSize);
+        for (let n = 0; n < fftSize; n++) {
+          const idx = off + n;
+          rA[n] = (idx < sigA.length ? sigA[idx] : 0) * win[n];
+          rB[n] = (idx < sigB.length ? sigB[idx] : 0) * win[n];
+        }
+        fft(rA, iA, false);
+        fft(rB, iB, false);
+
+        // Compute log-magnitude spectra
+        const logMagA = new Float32Array(fftSize);
+        const logMagB = new Float32Array(fftSize);
+        for (let k = 0; k < fftSize; k++) {
+          logMagA[k] = Math.log(Math.max(1e-10, Math.sqrt(rA[k] * rA[k] + iA[k] * iA[k])));
+          logMagB[k] = Math.log(Math.max(1e-10, Math.sqrt(rB[k] * rB[k] + iB[k] * iB[k])));
+        }
+
+        // Cepstral analysis: IFFT of log-magnitude to get cepstrum
+        const cepA_re = new Float32Array(fftSize), cepA_im = new Float32Array(fftSize);
+        const cepB_re = new Float32Array(fftSize), cepB_im = new Float32Array(fftSize);
+        for (let k = 0; k < fftSize; k++) {
+          cepA_re[k] = logMagA[k]; cepA_im[k] = 0;
+          cepB_re[k] = logMagB[k]; cepB_im[k] = 0;
+        }
+        fft(cepA_re, cepA_im, true);
+        fft(cepB_re, cepB_im, true);
+
+        // Lifter: keep only first lifterOrder cepstral coefficients for envelope
+        const envA_re = new Float32Array(fftSize), envA_im = new Float32Array(fftSize);
+        const envB_re = new Float32Array(fftSize), envB_im = new Float32Array(fftSize);
+        for (let k = 0; k < lifterOrder && k < fftSize; k++) {
+          envA_re[k] = cepA_re[k]; envA_im[k] = cepA_im[k];
+          envB_re[k] = cepB_re[k]; envB_im[k] = cepB_im[k];
+        }
+        // Also keep the symmetric part for real-valued spectrum
+        for (let k = fftSize - lifterOrder + 1; k < fftSize; k++) {
+          envA_re[k] = cepA_re[k]; envA_im[k] = cepA_im[k];
+          envB_re[k] = cepB_re[k]; envB_im[k] = cepB_im[k];
+        }
+
+        // FFT back to get smoothed log-envelopes
+        fft(envA_re, envA_im, false);
+        fft(envB_re, envB_im, false);
+
+        // Cross-synthesis: flatten B's spectrum, apply A's envelope
+        const rH = new Float32Array(fftSize), iH = new Float32Array(fftSize);
+        for (let k = 0; k < fftSize; k++) {
+          const magB = Math.sqrt(rB[k] * rB[k] + iB[k] * iB[k]);
+          const phB = Math.atan2(iB[k], rB[k]);
+          const smoothEnvA = Math.exp(envA_re[k]); // spectral envelope of A
+          const smoothEnvB = Math.exp(envB_re[k]); // spectral envelope of B
+          // Flatten B by dividing out its envelope, then apply A's envelope
+          const flatB = magB / Math.max(smoothEnvB, 1e-6);
+          const newMag = flatB * smoothEnvA * blend + magB * (1 - blend);
+          rH[k] = newMag * Math.cos(phB);
+          iH[k] = newMag * Math.sin(phB);
+        }
+        fft(rH, iH, true);
+
+        for (let n = 0; n < fftSize; n++) {
+          const idx = off + n;
+          if (idx < Na) out[idx] += rH[n] * win[n];
+        }
+      }
+
+      for (let i = 0; i < Na; i++) out[i] /= 1.5;
+      let mx = 0;
+      for (let i = 0; i < Na; i++) if (Math.abs(out[i]) > mx) mx = Math.abs(out[i]);
+      if (mx > 0) for (let i = 0; i < Na; i++) out[i] = out[i] / mx * 0.9;
+
+      playBuffer(out, crossSr);
+    } catch(e) {
+      console.error('Envelope cross-synthesis error:', e);
     }
   });
 
