@@ -1255,7 +1255,7 @@ function computeCWT(signal, scales, omega0, N) {
 
   function computeSTFT(sig, winSize) {
     const hop = Math.floor(winSize / 4);
-    const numFrames = Math.floor((N - winSize) / hop) + 1;
+    const numFrames = Math.max(1, Math.floor((N - winSize) / hop) + 1);
     const numBins = Math.floor(winSize / 2);
     const result = [];
     for (let f = 0; f < numFrames; f++) {
@@ -1264,7 +1264,8 @@ function computeCWT(signal, scales, omega0, N) {
         let re = 0, im = 0;
         for (let n = 0; n < winSize; n++) {
           const w = 0.5 - 0.5 * Math.cos(2 * Math.PI * n / winSize); // Hann
-          const s = sig[f * hop + n] * w;
+          const idx = f * hop + n;
+          const s = (idx < sig.length ? sig[idx] : 0) * w;
           re += s * Math.cos(-2 * Math.PI * k * n / winSize);
           im += s * Math.sin(-2 * Math.PI * k * n / winSize);
         }
