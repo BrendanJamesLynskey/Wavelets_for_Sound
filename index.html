@@ -3737,6 +3737,13 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   // ── STFT-based spectral cross-synthesis (overlap-add) ──
   // Per-frame: |FFT(A)| × phase(FFT(B)) → IFFT, then overlap-add
   playHybridBtn.addEventListener('click', () => {
+    // Resume AudioContext immediately inside the user-gesture callback,
+    // before any heavy computation.  Chrome/Firefox revoke the "user
+    // gesture" token after ~1 s of synchronous work, so if we create /
+    // resume the AudioContext only after the STFT loop we may still be
+    // in a suspended state when src.start() is called → silence.
+    const _audioCtx = getAudioCtx();
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
     try {
       const blend = parseFloat(blendSlider.value);
       const sigA = makeAudioForType(selA.value);
