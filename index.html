@@ -931,7 +931,7 @@ details[open] summary::before{transform:rotate(90deg)}
       <button id="playUnfiltered">♪ Original</button>
       <button id="playFiltered">♪ Filtered</button>
     </div>
-    <div class="viz-caption">Top: original scalogram · Bottom: filtered scalogram — zeroed regions shown dark</div>
+    <div class="viz-caption">Top: original scalogram · Bottom: time-varying filtered scalogram — filter fades in between the dashed markers (attack preserved, sustain filtered)</div>
   </div>
 
   <h3>Cross-synthesis</h3>
@@ -1648,6 +1648,7 @@ function computeCWT(signal, scales, omega0, N) {
         animId = requestAnimationFrame(step);
       } else {
         drawFrame();
+        canvas.dispatchEvent(new CustomEvent('scalogramBuilt'));
       }
     }
     step();
@@ -2252,22 +2253,37 @@ function computeCWT(signal, scales, omega0, N) {
       }
     }
 
-    // Filtered scalogram (bottom)
+    // Filtered scalogram (bottom) — time-varying: filter fades in from col 0.2N to 0.6N
     const botY = halfH + 4;
-    for (let si = 0; si < numScales; si++) {
-      let pass = true;
+    const rampS = Math.floor(0.2 * N), rampE = Math.floor(0.6 * N);
+    function scalePass(si) {
       switch (filterType) {
-        case 'lowpass': pass = si < cutoff; break;
-        case 'highpass': pass = si >= cutoff; break;
-        case 'bandpass': pass = si >= cutoff - 8 && si < cutoff + 8; break;
-        case 'notch': pass = !(si >= cutoff - 5 && si < cutoff + 5); break;
+        case 'lowpass':  return si < cutoff;
+        case 'highpass': return si >= cutoff;
+        case 'bandpass': return si >= cutoff - 8 && si < cutoff + 8;
+        case 'notch':    return !(si >= cutoff - 5 && si < cutoff + 5);
       }
+      return true;
+    }
+    for (let si = 0; si < numScales; si++) {
+      const pass = scalePass(si);
       for (let b = 0; b < N; b++) {
-        const v = pass ? cwt[si][b] / (maxC || 1) : 0;
-        ctx.fillStyle = pass ? magmaColor(Math.pow(v, 0.6)) : '#08090d';
+        let v = cwt[si][b] / (maxC || 1);
+        if (!pass) {
+          const evolve = Math.max(0, Math.min(1, (b - rampS) / (rampE - rampS)));
+          v *= (1 - evolve);
+        }
+        ctx.fillStyle = v > 0.001 ? magmaColor(Math.pow(v, 0.6)) : '#08090d';
         ctx.fillRect(b * cellW, botY + si * cellH, cellW + 1, cellH + 1);
       }
     }
+    // Mark filter onset region
+    ctx.strokeStyle = 'rgba(232,164,74,0.5)';
+    ctx.setLineDash([3, 3]);
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(rampS * cellW, botY); ctx.lineTo(rampS * cellW, H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(rampE * cellW, botY); ctx.lineTo(rampE * cellW, H); ctx.stroke();
+    ctx.setLineDash([]);
 
     // Divider
     ctx.strokeStyle = '#e8a44a';
@@ -2296,21 +2312,26 @@ function computeCWT(signal, scales, omega0, N) {
     const cutoff = parseInt(cutoffSlider.value);
     const filterType = filterSelect.value;
     const samples = new Float32Array(sr * dur);
+    // Time-varying: filtered harmonics fade out from t=0.2s to t=0.6s
+    const rampStart = 0.2, rampEnd = 0.6;
     for (let h = 1; h <= nHarm; h++) {
       const si = Math.floor((h / nHarm) * 40);
       let pass = true;
-      if (doFilter) {
-        switch (filterType) {
-          case 'lowpass': pass = si < cutoff; break;
-          case 'highpass': pass = si >= cutoff; break;
-          case 'bandpass': pass = si >= cutoff-8 && si < cutoff+8; break;
-          case 'notch': pass = !(si >= cutoff-5 && si < cutoff+5); break;
-        }
+      switch (filterType) {
+        case 'lowpass':  pass = si < cutoff; break;
+        case 'highpass': pass = si >= cutoff; break;
+        case 'bandpass': pass = si >= cutoff-8 && si < cutoff+8; break;
+        case 'notch':    pass = !(si >= cutoff-5 && si < cutoff+5); break;
       }
-      if (!pass) continue;
       for (let i = 0; i < samples.length; i++) {
         const t = i / sr;
-        samples[i] += 0.08*(1/h)*Math.exp(-h*1.5*t)*Math.sin(2*Math.PI*f0*h*t);
+        let amp = 1.0;
+        if (doFilter && !pass) {
+          const evolve = Math.max(0, Math.min(1, (t - rampStart) / (rampEnd - rampStart)));
+          amp = 1.0 - evolve;
+        }
+        if (amp < 0.001) continue;
+        samples[i] += amp * 0.08*(1/h)*Math.exp(-h*1.5*t)*Math.sin(2*Math.PI*f0*h*t);
       }
     }
     return samples;
@@ -2984,8 +3005,11 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     // exactly one period aligns phases perfectly — no pitch change.
     const period = Math.round(sr / f0);     // 200 samples @ 220 Hz
     const grainSize = 4 * period;           // 800 samples
-    const synthHop = period;                // advance one period per grain in output
-    const anaHop = Math.max(1, Math.round(period / factor)); // input advance
+    // PSOLA: keep one hop = period so consecutive grains are phase-coherent.
+    // Stretch (F>1): advance 1 period in input, F periods in output.
+    // Compress (F<1): advance 1/F periods in input, 1 period in output.
+    const anaHop  = factor >= 1 ? period : Math.max(1, Math.round(period / factor));
+    const synthHop = factor >= 1 ? Math.round(period * factor) : period;
     const M = Math.floor(orig.length * factor);
     const out = new Float32Array(M);
     const norm = new Float32Array(M);
@@ -3189,7 +3213,7 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     const H = 400;
     const ctx = canvas.getContext('2d');
     ctx.save();
-    ctx.scale(DPR, DPR);
+    // Note: fitCanvas already applied DPR scale; do NOT scale again here
 
     // Two notes: first note ~0-128 samples, second note ~128-256 samples
     const N = 256;
@@ -3237,12 +3261,8 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     ctx.restore();
   };
 
-  // Attach: re-draw overlay whenever build button clicked or checkbox toggled
-  const buildBtn = document.getElementById('buildScalogram');
-  if (buildBtn) {
-    const orig = buildBtn.onclick;
-    buildBtn.addEventListener('click', () => setTimeout(pianoOverlay, 1500));
-  }
+  // Attach: re-draw overlay after scalogram animation completes
+  canvas.addEventListener('scalogramBuilt', () => pianoOverlay());
   checkbox.addEventListener('change', () => {
     if (checkbox.checked) pianoOverlay();
     else {
@@ -3416,43 +3436,36 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   playCleanBtn.addEventListener('click', () => playBuffer(makeAudioSig(sigSelect.value, false, 0, true), 44100));
   playNoisyBtn.addEventListener('click', () => playBuffer(makeAudioSig(sigSelect.value, true, 0, true), 44100));
   playDenoisedBtn.addEventListener('click', () => {
-    const threshFrac = parseFloat(threshSlider.value); // 0–1 slider
+    const threshold = parseFloat(threshSlider.value);
     const noiseLevel = parseFloat(noiseLvl.value);
     const type = sigSelect.value;
     const sr = 44100;
 
-    // CWT of noisy normalised signal
+    // Use the same CWT denoising that drives the visualization
     const clean = makeCleanSig(type);
     const noisy = addNoise(clean, noiseLevel);
-    const cwtN = computeCWTComplex(noisy, scales, omega0);
+    const den = denoise(noisy, threshold); // 256-sample denoised, normalized to max 1
 
-    // Estimate noise sigma from finest-scale coefficients via MAD estimator
-    // (finest scale = si=0, smallest a → dominated by broadband noise)
-    const fineMags = new Float32Array(N);
-    for (let b = 0; b < N; b++)
-      fineMags[b] = Math.sqrt(cwtN[0].re[b] ** 2 + cwtN[0].im[b] ** 2);
-    const sorted = Float32Array.from(fineMags).sort();
-    const medianMag = sorted[Math.floor(N / 2)];
-    const estSigma = medianMag / 0.6745; // MAD → Gaussian sigma
+    // Normalize noisy for a fair comparison
+    let nMax = 0;
+    for (let i = 0; i < N; i++) if (Math.abs(noisy[i]) > nMax) nMax = Math.abs(noisy[i]);
+    const noisyNorm = new Float32Array(N);
+    for (let i = 0; i < N; i++) noisyNorm[i] = noisy[i] / (nMax || 1);
 
-    // Adaptive threshold: σ√(2 log N), scaled by slider (0 = none, 1 = optimal)
-    const autoThresh = estSigma * Math.sqrt(2 * Math.log(N));
-    const effThresh = threshFrac * autoThresh;
-
-    // Wiener-style gain: spectral power before vs after soft-thresholding
+    // Local RMS ratio over a short window → high where signal survived, low where noise removed
+    const winLen = 20;
     const gainEnv = new Float32Array(N);
     for (let b = 0; b < N; b++) {
-      let pwBefore = 0, pwAfter = 0;
-      for (let si = 0; si < S; si++) {
-        const mag = Math.sqrt(cwtN[si].re[b] ** 2 + cwtN[si].im[b] ** 2);
-        pwBefore += mag * mag;
-        const thMag = Math.max(0, mag - effThresh);
-        pwAfter += thMag * thMag;
+      let pN = 0, pD = 0;
+      for (let k = 0; k < winLen; k++) {
+        const idx = Math.min(b + k, N - 1);
+        pN += noisyNorm[idx] * noisyNorm[idx];
+        pD += den[idx] * den[idx];
       }
-      gainEnv[b] = pwBefore > 0 ? Math.sqrt(pwAfter / pwBefore) : 0;
+      gainEnv[b] = pN > 1e-8 ? Math.min(1, Math.sqrt(pD / pN)) : 0;
     }
 
-    // Apply envelope to audio-rate noisy signal
+    // Apply gain envelope to audio-rate noisy signal
     const audioNoisy = makeAudioSig(type, true, 0, true);
     const out = new Float32Array(audioNoisy.length);
     for (let i = 0; i < audioNoisy.length; i++) {
