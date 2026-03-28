@@ -3638,16 +3638,15 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     const Na = Math.floor(sr * dur);
     const out = new Float32Array(Na);
 
-    // Three vowel segments: [start, end, f0, formants:[{f, bw, gain}]]
+    // Three vowels, continuous (no gaps), with smooth crossfades
     const vowels = [
-      { s: 0,    e: 0.8,  f0: 150, fmt: [{f:800,bw:80,g:1},{f:1200,bw:100,g:0.7},{f:2500,bw:150,g:0.35}] },
-      { s: 0.85, e: 1.7,  f0: 170, fmt: [{f:270,bw:60,g:1},{f:2300,bw:150,g:0.5},{f:3000,bw:200,g:0.3}] },
-      { s: 1.75, e: 2.5,  f0: 140, fmt: [{f:500,bw:70,g:1},{f:900,bw:100,g:0.6},{f:2300,bw:150,g:0.3}] }
+      { s: 0,   e: 0.9,  f0: 150, fmt: [{f:800,bw:80,g:1},{f:1200,bw:100,g:0.7},{f:2500,bw:150,g:0.35}] },
+      { s: 0.75, e: 1.85, f0: 170, fmt: [{f:270,bw:60,g:1},{f:2300,bw:150,g:0.5},{f:3000,bw:200,g:0.3}] },
+      { s: 1.7,  e: 2.5,  f0: 140, fmt: [{f:500,bw:70,g:1},{f:900,bw:100,g:0.6},{f:2300,bw:150,g:0.3}] }
     ];
 
     for (const vow of vowels) {
       const segLen = Math.floor((vow.e - vow.s) * sr);
-      // Glottal source: pulse train with spectral tilt
       const source = new Float32Array(segLen);
       for (let h = 1; h <= 25; h++) {
         const fh = vow.f0 * h;
@@ -3655,11 +3654,12 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
         const srcAmp = 1 / (h * h);
         for (let i = 0; i < segLen; i++) {
           const t = i / sr;
-          const env = Math.min(1, t / 0.02) * Math.min(1, (vow.e - vow.s - t) / 0.02);
+          const segDur = vow.e - vow.s;
+          // Smooth crossfade envelope: 80ms fade-in and fade-out
+          const env = Math.min(1, t / 0.08) * Math.min(1, (segDur - t) / 0.08);
           source[i] += srcAmp * env * Math.sin(2 * Math.PI * fh * t);
         }
       }
-      // Single formant filter pass
       const filtered = new Float32Array(segLen);
       for (const fmt of vow.fmt) {
         const w0 = 2 * Math.PI * fmt.f / sr;
@@ -3774,7 +3774,8 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
         for (let k = 0; k < fftSize; k++) {
           const mA = Math.sqrt(rA[k] * rA[k] + iA[k] * iA[k]);
           const mB = Math.sqrt(rB[k] * rB[k] + iB[k] * iB[k]);
-          const mag = mA * blend + mB * (1 - blend);
+          // Spectral floor: even when A is silent, let B leak through at -20dB
+          const mag = Math.max(mA * blend + mB * (1 - blend), mB * 0.1);
           const ph = Math.atan2(iB[k], rB[k]);
           rH[k] = mag * Math.cos(ph);
           iH[k] = mag * Math.sin(ph);
