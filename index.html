@@ -1,0 +1,3461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wavelets for Sound — Kronland-Martinet, Grossmann & Morlet</title>
+<style>
+:root {
+  --bg: #0a0b0f;
+  --bg2: #12141c;
+  --bg3: #1a1d2a;
+  --fg: #d4d6e0;
+  --fg-dim: #8a8d9a;
+  --accent: #e8a44a;
+  --accent2: #4a9de8;
+  --accent3: #5ce89a;
+  --accent4: #e85a7a;
+  --accent5: #b06ae8;
+  --border: #2a2d3a;
+  --glow: rgba(232,164,74,0.15);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;font-size:16px}
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font-family:'Palatino Linotype','Book Antiqua',Palatino,'Georgia',serif;
+  line-height:1.75;
+  overflow-x:hidden;
+}
+::selection{background:var(--accent);color:var(--bg)}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid transparent;transition:border-color .2s}
+a:hover{border-bottom-color:var(--accent)}
+
+/* HEADER */
+header{
+  min-height:100vh;
+  display:flex;flex-direction:column;
+  justify-content:center;align-items:center;
+  text-align:center;
+  padding:2rem;
+  position:relative;
+  overflow:hidden;
+}
+header canvas{position:absolute;top:0;left:0;width:100%;height:100%;z-index:0;opacity:.35}
+header .content{position:relative;z-index:1;max-width:800px}
+header h1{
+  font-size:clamp(2rem,5vw,3.5rem);
+  font-weight:300;
+  letter-spacing:.05em;
+  color:var(--accent);
+  text-shadow:0 0 60px rgba(232,164,74,.3);
+  margin-bottom:.5em;
+}
+header h1 em{font-style:italic;color:var(--fg);font-weight:400}
+header .subtitle{font-size:1.15rem;color:var(--fg-dim);max-width:600px;margin:0 auto 2em}
+header .people{
+  display:flex;gap:2rem;justify-content:center;flex-wrap:wrap;
+  margin-bottom:2em;
+}
+header .people span{
+  font-size:.95rem;color:var(--fg);
+  padding:.4em 1em;
+  border:1px solid var(--border);
+  border-radius:2px;
+  background:rgba(26,29,42,.7);
+}
+
+/* NAV / TOC */
+nav#toc{
+  position:sticky;top:0;z-index:100;
+  background:rgba(10,11,15,.92);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  padding:.6rem 1rem;
+  overflow-x:auto;
+  white-space:nowrap;
+  text-align:center;
+}
+nav#toc a{
+  display:inline-block;
+  font-size:.8rem;
+  color:var(--fg-dim);
+  padding:.3em .8em;
+  margin:0 .1em;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  font-family:'Lucida Console',Monaco,monospace;
+  transition:color .2s;
+  border-bottom:none;
+}
+nav#toc a:hover,nav#toc a.active{color:var(--accent)}
+
+/* SECTIONS */
+section{
+  max-width:900px;
+  margin:0 auto;
+  padding:4rem 1.5rem;
+  border-bottom:1px solid var(--border);
+}
+section:last-of-type{border-bottom:none}
+
+h2{
+  font-size:clamp(1.5rem,3vw,2.2rem);
+  font-weight:300;
+  color:var(--accent);
+  margin-bottom:.3em;
+  letter-spacing:.03em;
+}
+h2 .num{
+  font-family:'Lucida Console',Monaco,monospace;
+  font-size:.7em;
+  color:var(--fg-dim);
+  margin-right:.5em;
+}
+h3{
+  font-size:1.2rem;
+  color:var(--accent2);
+  margin:2em 0 .5em;
+  font-weight:400;
+}
+p{margin-bottom:1.2em}
+.lead{font-size:1.08rem;color:var(--fg);margin-bottom:1.5em}
+
+/* CANVASES & FIGURES */
+.viz{
+  margin:2em 0;
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:4px;
+  overflow:hidden;
+}
+.viz canvas{display:block;width:100%;cursor:crosshair}
+.viz-caption{
+  font-size:.8rem;color:var(--fg-dim);
+  padding:.6em 1em;
+  border-top:1px solid var(--border);
+  font-family:'Lucida Console',Monaco,monospace;
+}
+
+/* CONTROLS */
+.controls{
+  display:flex;flex-wrap:wrap;gap:.8rem;
+  padding:.8em 1em;
+  background:var(--bg3);
+  border-top:1px solid var(--border);
+  align-items:center;
+}
+.controls label{
+  font-size:.78rem;
+  color:var(--fg-dim);
+  font-family:'Lucida Console',Monaco,monospace;
+  display:flex;align-items:center;gap:.4em;
+}
+.controls input[type="range"]{
+  width:120px;
+  accent-color:var(--accent);
+}
+.controls select{
+  background:var(--bg);color:var(--fg);
+  border:1px solid var(--border);
+  padding:.3em .5em;
+  font-size:.78rem;
+  border-radius:2px;
+  font-family:inherit;
+}
+.controls button,.btn{
+  background:var(--accent);
+  color:var(--bg);
+  border:none;
+  padding:.4em 1em;
+  font-size:.78rem;
+  font-family:'Lucida Console',Monaco,monospace;
+  cursor:pointer;
+  border-radius:2px;
+  letter-spacing:.03em;
+  transition:background .2s;
+}
+.controls button:hover,.btn:hover{background:#f0b860}
+.btn-outline{
+  background:transparent;
+  border:1px solid var(--accent);
+  color:var(--accent);
+}
+.btn-outline:hover{background:var(--accent);color:var(--bg)}
+
+/* MATH */
+.math{
+  display:block;
+  text-align:center;
+  padding:1.2em;
+  margin:1.5em 0;
+  background:var(--bg2);
+  border-left:3px solid var(--accent);
+  font-family:'Courier New',monospace;
+  font-size:.95rem;
+  color:var(--accent2);
+  overflow-x:auto;
+  border-radius:0 4px 4px 0;
+}
+.math-inline{
+  font-family:'Courier New',monospace;
+  color:var(--accent2);
+  font-size:.9em;
+}
+
+/* TIMELINE */
+.timeline{
+  position:relative;
+  padding:1em 0 1em 2em;
+  margin:2em 0;
+}
+.timeline::before{
+  content:'';
+  position:absolute;
+  left:.6em;top:0;bottom:0;
+  width:2px;
+  background:var(--border);
+}
+.timeline-item{
+  position:relative;
+  margin-bottom:1.8em;
+  padding-left:1.5em;
+}
+.timeline-item::before{
+  content:'';
+  position:absolute;
+  left:-1.95em;top:.5em;
+  width:10px;height:10px;
+  border-radius:50%;
+  background:var(--accent);
+  border:2px solid var(--bg);
+}
+.timeline-year{
+  font-family:'Lucida Console',Monaco,monospace;
+  color:var(--accent);
+  font-size:.85rem;
+  margin-bottom:.2em;
+}
+.timeline-text{font-size:.92rem;color:var(--fg-dim)}
+
+/* AUDIO PLAYER */
+.audio-demo{
+  display:flex;align-items:center;gap:1em;
+  padding:.8em 1em;
+  background:var(--bg3);
+  border:1px solid var(--border);
+  border-radius:4px;
+  margin:1em 0;
+}
+.audio-demo .play-btn{
+  width:40px;height:40px;
+  border-radius:50%;
+  background:var(--accent);
+  border:none;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+  transition:transform .1s;
+}
+.audio-demo .play-btn:hover{transform:scale(1.1)}
+.audio-demo .play-btn svg{width:18px;height:18px;fill:var(--bg)}
+.audio-demo .info{flex:1}
+.audio-demo .info .title{font-size:.85rem;color:var(--fg)}
+.audio-demo .info .desc{font-size:.75rem;color:var(--fg-dim)}
+
+/* QUOTE */
+blockquote{
+  border-left:3px solid var(--accent5);
+  padding:.8em 1.2em;
+  margin:1.5em 0;
+  color:var(--fg-dim);
+  font-style:italic;
+  background:rgba(176,106,232,.05);
+}
+blockquote cite{display:block;font-size:.85rem;color:var(--accent5);margin-top:.5em;font-style:normal}
+
+/* GRID */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1.5em;margin:1.5em 0}
+@media(max-width:700px){.grid-2{grid-template-columns:1fr}}
+
+/* REFERENCE LIST */
+.references{
+  margin-top:2em;
+  padding:1.5em;
+  background:var(--bg2);
+  border:1px solid var(--border);
+  border-radius:4px;
+}
+.references h3{margin-top:0}
+.references ol{padding-left:1.5em}
+.references li{
+  font-size:.85rem;color:var(--fg-dim);
+  margin-bottom:.5em;
+  line-height:1.5;
+}
+.references li em{color:var(--fg)}
+
+/* FOOTER */
+footer{
+  text-align:center;
+  padding:3em 1.5em;
+  color:var(--fg-dim);
+  font-size:.85rem;
+  border-top:1px solid var(--border);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--fg-dim)}
+
+/* EXPANDABLE */
+.expandable{
+  margin:1.5em 0;
+  border:1px solid var(--border);
+  border-radius:4px;
+  overflow:hidden;
+}
+.expandable summary{
+  padding:.8em 1.2em;
+  background:var(--bg3);
+  cursor:pointer;
+  font-size:.9rem;
+  color:var(--accent5);
+  font-family:'Lucida Console',Monaco,monospace;
+  letter-spacing:.03em;
+  list-style:none;
+  display:flex;align-items:center;gap:.5em;
+}
+.expandable summary::before{content:'▶';font-size:.7em;transition:transform .2s}
+details[open] summary::before{transform:rotate(90deg)}
+.expandable summary:hover{color:var(--fg)}
+.expandable .inner{padding:1.2em 1.4em;background:rgba(176,106,232,.04)}
+
+/* WAVELET TABS */
+.wtabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:0}
+.wtab{
+  padding:.4em 1em;
+  font-size:.78rem;
+  font-family:'Lucida Console',Monaco,monospace;
+  color:var(--fg-dim);
+  cursor:pointer;
+  border:1px solid transparent;
+  border-bottom:none;
+  border-radius:2px 2px 0 0;
+  background:var(--bg3);
+  margin-right:2px;
+  transition:color .2s;
+}
+.wtab.active{color:var(--accent);border-color:var(--border);background:var(--bg2)}
+.wtab:hover{color:var(--fg)}
+
+/* DENOISING SECTION */
+.noise-badge{
+  display:inline-block;
+  padding:.2em .6em;
+  background:rgba(232,90,122,.15);
+  border:1px solid var(--accent4);
+  color:var(--accent4);
+  font-size:.75rem;
+  font-family:'Lucida Console',Monaco,monospace;
+  border-radius:2px;
+  margin-right:.5em;
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!-- HERO / HEADER with animated wavelet background               -->
+<!-- ============================================================ -->
+<header>
+  <canvas id="heroCanvas"></canvas>
+  <div class="content">
+    <h1>Wavelets <em>for</em> Sound</h1>
+    <p class="subtitle">
+      How a physicist, a geophysicist, and a computer-music researcher in Marseille
+      transformed signal analysis — and gave us a new way to hear.
+    </p>
+    <div class="people">
+      <span>Alex Grossmann</span>
+      <span>Jean Morlet</span>
+      <span>Richard Kronland-Martinet</span>
+    </div>
+    <a href="#ch1" class="btn">Begin the story ↓</a>
+  </div>
+</header>
+
+<!-- ============================================================ -->
+<!-- TABLE OF CONTENTS                                             -->
+<!-- ============================================================ -->
+<nav id="toc">
+  <a href="#ch1">1 · Origins</a>
+  <a href="#ch2">2 · The CWT</a>
+  <a href="#ch3">3 · Morlet Wavelet</a>
+  <a href="#ch4">4 · Sound Analysis</a>
+  <a href="#ch5">5 · Synthesis</a>
+  <a href="#ch6">6 · Transients</a>
+  <a href="#ch7">7 · Transformations</a>
+  <a href="#ch7b">7b · Denoising</a>
+  <a href="#ch8">8 · Legacy</a>
+</nav>
+
+<!-- ============================================================ -->
+<!-- CHAPTER 1 · ORIGINS                                           -->
+<!-- ============================================================ -->
+<section id="ch1">
+  <h2><span class="num">1</span>Origins — From Seismology to Song</h2>
+  <p class="lead">
+    The wavelet transform was born from frustration with Fourier analysis.
+    Jean Morlet, exploring seismic signals at Elf Aquitaine in the early 1980s,
+    needed a method that could localise both frequency <em>and</em> time.
+    Fourier gave him one but not the other.
+  </p>
+
+  <div class="timeline">
+    <div class="timeline-item">
+      <div class="timeline-year">1946</div>
+      <div class="timeline-text">
+        Dennis Gabor proposes time-frequency atoms — Gaussian-windowed sinusoids —
+        drawing on ideas from quantum mechanics. The Short-Time Fourier Transform is born,
+        but its fixed window size limits its flexibility.
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-year">1980–82</div>
+      <div class="timeline-text">
+        Jean Morlet, a geophysicist at Elf Aquitaine, experiments with
+        "wavelets of constant shape" — analysis functions that dilate rather than
+        shift in frequency. He struggles to find mathematical rigour for his intuition.
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-year">1984</div>
+      <div class="timeline-text">
+        Alex Grossmann, a theoretical physicist at CNRS Marseille-Luminy (Centre de Physique Théorique),
+        provides the mathematical framework. Their landmark paper "Decomposition of Hardy Functions
+        into Square Integrable Wavelets of Constant Shape" formalises the Continuous Wavelet Transform.
+        Goupillaud joins for seismic applications.
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-year">1985</div>
+      <div class="timeline-text">
+        Richard Kronland-Martinet, working in the computer music group ("Équipe d'Informatique Musicale")
+        at LMA-CNRS Marseille, implements the first real-time wavelet transform for sound
+        using the <strong>SYTER</strong> audio processor — a custom hardware digital signal processor
+        designed by Jean-François Allouis at GRM (Groupe de Recherches Musicales), Paris.
+        SYTER (Système Temps Réel) used specialised DSP boards running at 100 kHz sample rates
+        to perform transforms impossible on general-purpose computers of the era.
+        Kronland-Martinet programmed SYTER to compute CWT coefficients in real time,
+        producing the first live wavelet-domain analysis and resynthesis of audio.
+        This was the first application of wavelets to audio signals.
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-year">1987</div>
+      <div class="timeline-text">
+        Kronland-Martinet, Morlet & Grossmann publish "Analysis of Sound Patterns through Wavelet Transforms"
+        — the foundational paper applying wavelets to speech and music recognition.
+        They also produce a 40-minute demonstration video.
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-year">1988</div>
+      <div class="timeline-text">
+        Kronland-Martinet publishes in the Computer Music Journal (MIT Press):
+        "The use of the wavelet transform for the analysis, synthesis and processing
+        of speech and music sounds" — demonstrating time-stretching, pitch-shifting,
+        cross-synthesis and filtering, all performed via wavelet-domain manipulation.
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-year">1989</div>
+      <div class="timeline-text">
+        Grossmann, Kronland-Martinet & Morlet publish "Reading and Understanding Continuous
+        Wavelet Transforms" in the landmark Springer volume <em>Wavelets</em>.
+        Kronland-Martinet completes his Doctorat d'État on wavelet-based sound analysis and synthesis.
+        The field explodes: Daubechies, Mallat, and Meyer develop discrete wavelet theory.
+      </div>
+    </div>
+  </div>
+
+  <p>
+    What made Marseille unique was the convergence: a theoretical physicist (Grossmann),
+    a geophysicist with engineering intuition (Morlet), and a computer musician
+    who needed real-time tools (Kronland-Martinet) — all working at CNRS laboratories
+    within walking distance of each other in the Luminy campus, nestled in the
+    calanques above the Mediterranean.
+  </p>
+</section>
+
+<!-- ============================================================ -->
+<!-- CHAPTER 2 · THE CWT                                           -->
+<!-- ============================================================ -->
+<section id="ch2">
+  <h2><span class="num">2</span>The Continuous Wavelet Transform</h2>
+  <p class="lead">
+    The central idea: instead of comparing a signal to infinite sinusoids (Fourier),
+    compare it to shifted and scaled copies of a single localised waveform — a "wavelet."
+  </p>
+
+  <div class="math">
+    W(a, b) = (1/√|a|) · ∫ x(t) · ψ*((t − b) / a) dt
+  </div>
+
+  <p>
+    Here <span class="math-inline">a</span> is the scale (controlling frequency resolution — large <span class="math-inline">a</span> catches low frequencies,
+    small <span class="math-inline">a</span> catches high), <span class="math-inline">b</span> is the translation (position in time),
+    and <span class="math-inline">ψ</span> is the "mother wavelet." The factor <span class="math-inline">1/√|a|</span> normalises energy across scales.
+  </p>
+
+  <h3>Why not just use the STFT?</h3>
+  <p>
+    The Short-Time Fourier Transform uses a window of fixed width. This means you get the same time resolution
+    at every frequency — but musically, a 50 Hz bass note needs a much longer observation window than a 5 kHz transient.
+    The wavelet transform adapts: it automatically uses long windows for low frequencies and short windows for high frequencies.
+    This is exactly how musical pitch perception works — the ear is a constant-Q analyser.
+  </p>
+
+  <h3>Interactive: Wavelet vs STFT — a chirp signal</h3>
+  <p>
+    Below, a frequency-sweeping chirp is analysed with both methods. The STFT spectrogram (left)
+    smears the chirp across time at low frequencies. The wavelet scalogram (right) tracks it cleanly
+    at all scales.
+  </p>
+
+  <div class="viz">
+    <canvas id="cwtVsStft" height="350"></canvas>
+    <div class="controls">
+      <label>Chirp speed <input type="range" id="chirpSpeed" min="1" max="10" value="5"></label>
+      <label>Window
+        <select id="stftWindow">
+          <option value="256">256 samples</option>
+          <option value="512" selected>512 samples</option>
+          <option value="1024">1024 samples</option>
+        </select>
+      </label>
+      <button id="playChirp">▶ Listen</button>
+    </div>
+    <div class="viz-caption">Left: STFT spectrogram · Right: CWT scalogram (Morlet wavelet) · Drag chirp speed to compare</div>
+  </div>
+
+  <h3>Interactive: Drag the wavelet probe</h3>
+  <p>
+    Click and drag on the signal below to slide a Morlet wavelet across it.
+    The highlighted cell in the scalogram updates in real time, showing exactly which
+    coefficient is computed at that position and scale.
+  </p>
+  <div class="viz">
+    <canvas id="waveletProbe" height="280"></canvas>
+    <div class="controls">
+      <label>Scale <input type="range" id="probeScale" min="0" max="39" value="15" step="1"> <span id="probeScaleVal">scale 15</span></label>
+    </div>
+    <div class="viz-caption">Top: signal with wavelet overlaid at cursor position · Bottom: scalogram with active cell highlighted — drag horizontally to move, use slider or vertical drag to change scale</div>
+  </div>
+
+  <h3>The Admissibility Condition</h3>
+  <p>
+    For the transform to be invertible — so we can reconstruct the signal from its wavelet coefficients —
+    the wavelet must satisfy the admissibility condition:
+  </p>
+  <div class="math">
+    C_ψ = ∫₀^∞ |Ψ(ω)|² / ω  dω  &lt; ∞
+  </div>
+  <p>
+    This requires that the wavelet has zero mean (its integral over all time is zero) and that its
+    Fourier transform <span class="math-inline">Ψ(ω)</span> decays sufficiently fast. The Morlet wavelet satisfies this
+    (approximately — a small correction term is needed), while pure Gaussians do not.
+  </p>
+
+  <h3>The Reconstruction Formula</h3>
+  <div class="math">
+    x(t) = (1/C_ψ) · ∫∫ W(a,b) · (1/√|a|) · ψ((t−b)/a) · da·db / a²
+  </div>
+  <p>
+    This double integral reconstructs the original signal perfectly from its wavelet coefficients.
+    Grossmann and Morlet proved this rigorously using the theory of square-integrable group representations
+    — specifically, the affine group (translation + dilation). This was the mathematical breakthrough
+    that separated wavelets from earlier ad-hoc multiscale methods.
+  </p>
+
+  <details class="expandable">
+    <summary>The Affine Group and Where Wavelets Come From</summary>
+    <div class="inner">
+      <p>
+        The deepest insight of Grossmann and Morlet was that the CWT is not just a useful trick —
+        it arises inevitably from the representation theory of the <em>affine group</em> (also called
+        the "ax+b group"), the group of transformations <span class="math-inline">t ↦ at + b</span>
+        with <span class="math-inline">a > 0</span>, <span class="math-inline">b ∈ ℝ</span>.
+      </p>
+      <div class="math">
+        Group law: (a₁, b₁) · (a₂, b₂) = (a₁a₂, a₁b₂ + b₁)
+      </div>
+      <p>
+        For any "admissible" function ψ (one satisfying the admissibility condition),
+        the map <span class="math-inline">(a, b) ↦ T_{a,b}ψ = (1/√a)·ψ((t−b)/a)</span>
+        is a <em>square-integrable representation</em> of this group on L²(ℝ).
+        The resolution of the identity — the reconstruction formula — then follows directly
+        from the general theory of such representations, as shown by Grossmann, Morlet and Paul (1985).
+      </p>
+      <p>
+        The crucial difference from the STFT (which uses the Weyl-Heisenberg group of translations
+        and phase shifts) is that the affine group acts on <em>scale</em>, not frequency.
+        Dilation is a multiplicative operation — which is why the CWT naturally uses
+        logarithmic frequency spacing, matching the musical scale.
+      </p>
+      <div class="math">
+        Resolution of identity: ∫∫ |ψ_{a,b}〉〈ψ_{a,b}| da·db/a² = C_ψ · I
+      </div>
+      <p>
+        This is the Dirac notation version of the reconstruction formula.
+        It says: the wavelet "atoms" <span class="math-inline">ψ_{a,b}</span>,
+        weighted by <span class="math-inline">da·db/a²</span> (the invariant measure on the affine group),
+        form a complete decomposition of the identity operator.
+        Any signal can be expanded in these atoms and recovered exactly.
+      </p>
+    </div>
+  </details>
+
+  <h3>Interactive: Heisenberg Boxes</h3>
+  <p>
+    Every analysis method is constrained by the Heisenberg uncertainty principle: you cannot
+    simultaneously resolve time and frequency arbitrarily precisely.
+    The product of time spread Δt and frequency spread Δω is always ≥ 1/2.
+    The difference lies in <em>how</em> that uncertainty is distributed across frequencies.
+  </p>
+  <div class="viz">
+    <canvas id="heisenbergBoxes" height="280"></canvas>
+    <div class="controls">
+      <label>Animate <input type="checkbox" id="heisbergAnimate" checked></label>
+      <button id="heisenbergToggle">Toggle STFT / CWT</button>
+    </div>
+    <div class="viz-caption">Time-frequency plane: each rectangle shows the "cell" of uncertainty for one analysis atom. STFT = fixed boxes; CWT = boxes that widen at low frequencies and narrow at high.</div>
+  </div>
+
+  <h3>Interactive: Admissibility Condition Explorer</h3>
+  <p>
+    Design a custom wavelet by adjusting its parameters and see whether it satisfies admissibility —
+    whether its Fourier transform decays correctly and its mean is zero.
+  </p>
+  <div class="viz">
+    <canvas id="admissibility" height="260"></canvas>
+    <div class="controls">
+      <label>ω₀ <input type="range" id="admOmega" min="0" max="8" value="5" step="0.5"> <span id="admOmegaVal">5.0</span></label>
+      <label>Bandwidth <input type="range" id="admBw" min="0.3" max="3" value="1" step="0.1"> <span id="admBwVal">1.0</span></label>
+      <label>DC offset <input type="range" id="admDC" min="-0.5" max="0.5" value="0" step="0.01"> <span id="admDCVal">0.00</span></label>
+      <span id="admResult" style="font-family:monospace;font-size:.8rem"></span>
+    </div>
+    <div class="viz-caption">Left: wavelet shape (real part) · Centre: Fourier magnitude |Ψ(ω)| · Right: admissibility integrand |Ψ(ω)|²/ω — must be finite (green) for reconstruction to be possible</div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- CHAPTER 3 · THE MORLET WAVELET                                -->
+<!-- ============================================================ -->
+<section id="ch3">
+  <h2><span class="num">3</span>The Morlet Wavelet</h2>
+  <p class="lead">
+    The wavelet that started it all: a complex sinusoid inside a Gaussian envelope.
+    It is the closest relative of musical tones in the wavelet family.
+  </p>
+
+  <div class="math">
+    ψ(t) = π^(−1/4) · exp(iω₀t) · exp(−t²/2)
+  </div>
+  <p>
+    The parameter <span class="math-inline">ω₀</span> controls the number of oscillations inside the Gaussian window.
+    A typical choice is <span class="math-inline">ω₀ = 5</span> or <span class="math-inline">6</span>, giving good frequency resolution.
+    Lower values give better time resolution at the cost of frequency precision.
+  </p>
+
+  <h3>Interactive: Explore the Morlet wavelet</h3>
+  <div class="viz">
+    <canvas id="morletExplorer" height="300"></canvas>
+    <div class="controls">
+      <label>ω₀ <input type="range" id="morletOmega" min="2" max="12" value="5" step="0.5"> <span id="morletOmegaVal">5.0</span></label>
+      <label>Scale a <input type="range" id="morletScale" min="0.3" max="5" value="1" step="0.1"> <span id="morletScaleVal">1.0</span></label>
+      <button id="playMorlet">▶ Listen to wavelet</button>
+    </div>
+    <div class="viz-caption">Top: Real part (blue) and envelope (gold) · Bottom: Fourier magnitude — note the bandpass shape</div>
+  </div>
+
+  <p>
+    Kronland-Martinet emphasised that the Morlet wavelet is particularly suited to audio because
+    its shape mirrors the structure of musical tones: an oscillation modulated by an amplitude envelope.
+    When dilated, it behaves like a constant-Q filter bank — each scale corresponds to a filter
+    whose bandwidth is a fixed fraction of its centre frequency, just like musical intervals.
+  </p>
+
+  <h3>Why "constant Q"?</h3>
+  <p>
+    The quality factor Q = f₀/Δf (centre frequency divided by bandwidth) stays constant across all scales.
+    On a piano, each octave has the same number of notes regardless of register.
+    The wavelet transform's log-frequency spacing naturally matches this musical structure,
+    whereas the STFT's linear frequency bins waste resolution on low frequencies
+    and lack resolution at high frequencies for musical applications.
+  </p>
+
+  <h3>Wavelet Family Comparison</h3>
+  <p>
+    The Morlet wavelet is one member of a broader family. Each has different trade-offs between
+    time localisation, frequency localisation, oscillation count, and admissibility.
+  </p>
+  <div class="viz">
+    <div class="wtabs" id="waveletFamilyTabs">
+      <div class="wtab active" data-wt="morlet">Morlet</div>
+      <div class="wtab" data-wt="mexhat">Mexican Hat</div>
+      <div class="wtab" data-wt="gabor">Gabor (real)</div>
+      <div class="wtab" data-wt="notelet">Notelet</div>
+    </div>
+    <canvas id="waveletFamily" height="240"></canvas>
+    <div class="viz-caption" id="waveletFamilyCaption">Morlet: complex Gaussian-modulated sinusoid — analytic, constant-Q, the natural choice for audio</div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- CHAPTER 4 · SOUND ANALYSIS                                    -->
+<!-- ============================================================ -->
+<section id="ch4">
+  <h2><span class="num">4</span>Sound Analysis — Seeing Music</h2>
+  <p class="lead">
+    Kronland-Martinet's 1987 and 1988 papers demonstrated that wavelet scalograms
+    reveal features of musical sounds that spectrograms obscure: attack transients,
+    vibrato trajectories, the onset structure of piano notes, and the formant
+    evolution of speech.
+  </p>
+
+  <h3>Interactive: Build a scalogram</h3>
+  <p>
+    Choose a signal type and watch the CWT scalogram build row by row.
+    Each row is computed by sliding the Morlet wavelet at a particular scale across the signal
+    and recording the correlation at each position.
+  </p>
+
+  <div class="viz">
+    <canvas id="scalogramBuilder" height="400"></canvas>
+    <div class="controls">
+      <label>Signal
+        <select id="scalogramSignal">
+          <option value="piano">Piano-like (harmonics + decay)</option>
+          <option value="chirp">Chirp (rising frequency)</option>
+          <option value="vibrato">Vibrato tone</option>
+          <option value="attack">Percussive attack + tone</option>
+          <option value="two_notes">Two sequential notes</option>
+        </select>
+      </label>
+      <button id="buildScalogram">▶ Build</button>
+      <button id="playScalogramSound">♪ Listen</button>
+      <label><input type="checkbox" id="showPianoRoll"> Piano roll overlay</label>
+    </div>
+    <div class="viz-caption">Top: signal waveform · Bottom: CWT scalogram (scale vs time, colour = |W(a,b)|) · Enable piano roll overlay for two-notes signal</div>
+  </div>
+
+  <h3>What Kronland-Martinet saw</h3>
+  <p>
+    In their analysis of piano sounds, the wavelet representation revealed that
+    the attack portion — the first few tens of milliseconds — contains a broadband burst
+    that excites all harmonics simultaneously, followed by a gradual decay
+    where each partial has its own damping rate. Higher harmonics decay faster,
+    which is why a piano note "mellows" over time. The wavelet scalogram captures
+    this evolution naturally, while a single FFT frame cannot.
+  </p>
+  <p>
+    For speech, they showed that the wavelet transform tracks the rapid formant transitions
+    during consonant-vowel boundaries with far greater temporal precision than the STFT,
+    because the high-frequency wavelets (small scales) provide millisecond-level time resolution.
+  </p>
+
+  <h3>Instantaneous Frequency from the Ridge</h3>
+  <p>
+    Grossmann and Kronland-Martinet showed that for signals with slowly-varying frequency,
+    the <em>ridge</em> of the wavelet transform — the curve of maximum magnitude across scales at each time —
+    gives a direct estimate of the instantaneous frequency. This became a powerful tool for
+    tracking pitch contours, vibrato, and glissandi in musical signals.
+  </p>
+
+  <div class="viz">
+    <canvas id="ridgeExtraction" height="300"></canvas>
+    <div class="controls">
+      <label>Vibrato rate <input type="range" id="vibratoRate" min="2" max="12" value="5" step="0.5"> <span id="vibratoRateVal">5.0 Hz</span></label>
+      <label>Vibrato depth <input type="range" id="vibratoDepth" min="0" max="80" value="30"> <span id="vibratoDepthVal">30 Hz</span></label>
+      <button id="playVibrato">▶ Listen</button>
+    </div>
+    <div class="viz-caption">Scalogram with extracted ridge (white line) tracking instantaneous frequency of a vibrato tone</div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- CHAPTER 5 · SYNTHESIS                                         -->
+<!-- ============================================================ -->
+<section id="ch5">
+  <h2><span class="num">5</span>Wavelet Synthesis — From Analysis Back to Sound</h2>
+  <p class="lead">
+    The reconstruction formula means any modification to the wavelet coefficients
+    produces a valid transformed sound. Kronland-Martinet exploited this for
+    additive resynthesis using extracted instantaneous amplitude and frequency.
+  </p>
+
+  <p>
+    Using the complex Morlet wavelet, each ridge of the scalogram can be interpreted as a single
+    partial (a sinusoidal component) of the sound. The modulus at the ridge gives the
+    instantaneous amplitude, and the phase derivative gives the instantaneous frequency.
+    By extracting these for each partial and resynthesising with oscillators, one obtains
+    a high-quality reconstruction that can also be manipulated.
+  </p>
+
+  <h3>Interactive: Additive resynthesis from wavelet analysis</h3>
+  <div class="viz">
+    <canvas id="resynthesis" height="350"></canvas>
+    <div class="controls">
+      <label>Partials <input type="range" id="numPartials" min="1" max="16" value="8"> <span id="numPartialsVal">8</span></label>
+      <label>Decay rate <input type="range" id="decayRate" min="1" max="20" value="8"> <span id="decayRateVal">8</span></label>
+      <button id="playOrigSynth">♪ Original</button>
+      <button id="playResynth">♪ Resynthesised</button>
+    </div>
+    <div class="viz-caption">Top: Original harmonic signal · Middle: extracted partials from CWT ridges · Bottom: resynthesised waveform</div>
+  </div>
+
+  <p>
+    Kronland-Martinet noted that wavelet-based resynthesis has a key advantage over
+    Fourier-based methods: because the wavelet analysis adapts its time resolution
+    to frequency, transients are captured with high temporal precision while sustained
+    tones are captured with high frequency precision. This "best of both worlds"
+    is exactly what music demands.
+  </p>
+</section>
+
+<!-- ============================================================ -->
+<!-- CHAPTER 6 · TRANSIENTS                                        -->
+<!-- ============================================================ -->
+<section id="ch6">
+  <h2><span class="num">6</span>Detection of Abrupt Changes</h2>
+  <p class="lead">
+    In 1987, Grossmann, Holschneider, Kronland-Martinet and Morlet published
+    a paper on detecting abrupt changes in sound signals using wavelet transforms —
+    one of the earliest works on wavelet-based edge detection in signals.
+  </p>
+
+  <p>
+    A sharp transient — a click, a note onset, a consonant burst — creates a distinctive
+    pattern in the wavelet domain: a vertical line of high energy across all scales,
+    because the discontinuity excites wavelets at every frequency simultaneously.
+    This "cone of influence" spreads outward from the transient's location,
+    wider at lower frequencies (larger scales) and narrower at higher frequencies.
+  </p>
+
+  <h3>Interactive: Transient detection</h3>
+  <div class="viz">
+    <canvas id="transientDetect" height="350"></canvas>
+    <div class="controls">
+      <label>Signal
+        <select id="transientSignal">
+          <option value="clicks">Clicks in noise</option>
+          <option value="onset">Note onset</option>
+          <option value="speech">Syllable boundaries</option>
+        </select>
+      </label>
+      <button id="buildTransient">▶ Analyse</button>
+      <button id="playTransient">♪ Listen</button>
+    </div>
+    <div class="viz-caption">Transients appear as vertical streaks across all scales — their precise timing is revealed</div>
+  </div>
+
+  <p>
+    This capability was crucial for music: separating the "attack" portion of a note
+    (which carries perceptual identity) from the "sustain" portion (which carries pitch)
+    is fundamental to understanding timbre. The wavelet transform does this naturally,
+    whereas the STFT forces a compromise between time and frequency resolution
+    that invariably blurs one or the other.
+  </p>
+</section>
+
+<!-- ============================================================ -->
+<!-- CHAPTER 7 · SOUND TRANSFORMATIONS                             -->
+<!-- ============================================================ -->
+<section id="ch7">
+  <h2><span class="num">7</span>Sound Transformations</h2>
+  <p class="lead">
+    Kronland-Martinet's 1988 Computer Music Journal paper demonstrated four
+    ground-breaking sound transformations, all performed by manipulating
+    wavelet coefficients before reconstruction.
+  </p>
+
+  <h3>Time-stretching without pitch change</h3>
+  <p>
+    By interpolating the wavelet coefficients along the time axis (stretching the b parameter)
+    while keeping the scale axis unchanged, the sound is slowed down without changing its pitch.
+    This is because the frequency content at each scale is preserved — only the temporal evolution
+    is altered.
+  </p>
+
+  <div class="viz">
+    <canvas id="timeStretch" height="250"></canvas>
+    <div class="controls">
+      <label>Stretch factor <input type="range" id="stretchFactor" min="0.5" max="3" value="1" step="0.1"> <span id="stretchFactorVal">1.0×</span></label>
+      <button id="playOrigStretch">♪ Original</button>
+      <button id="playStretched">♪ Stretched</button>
+    </div>
+    <div class="viz-caption">Wavelet-domain time stretching — pitch is preserved while duration changes</div>
+  </div>
+
+  <h3>Pitch-shifting without time change</h3>
+  <p>
+    By shifting the wavelet coefficients along the scale axis (moving to different scales)
+    while keeping the time axis unchanged, the pitch is transposed without altering duration.
+  </p>
+
+  <h3>Time-varying filtering</h3>
+  <p>
+    Zeroing out wavelet coefficients at selected scales effectively removes those frequency
+    bands from the signal. Because the filtering is done in the time-scale plane,
+    it can vary over time — for instance, removing high frequencies only during the sustain
+    while preserving the full-bandwidth attack.
+  </p>
+
+  <div class="viz">
+    <canvas id="waveletFilter" height="300"></canvas>
+    <div class="controls">
+      <label>Filter
+        <select id="filterType">
+          <option value="lowpass">Low-pass (remove high scales)</option>
+          <option value="highpass">High-pass (remove low scales)</option>
+          <option value="bandpass">Band-pass (keep middle)</option>
+          <option value="notch">Notch (remove middle)</option>
+        </select>
+      </label>
+      <label>Cutoff <input type="range" id="filterCutoff" min="5" max="35" value="20"> <span id="filterCutoffVal">20</span></label>
+      <button id="playUnfiltered">♪ Original</button>
+      <button id="playFiltered">♪ Filtered</button>
+    </div>
+    <div class="viz-caption">Top: original scalogram · Bottom: filtered scalogram — zeroed regions shown dark</div>
+  </div>
+
+  <h3>Cross-synthesis</h3>
+  <p>
+    The most striking demonstration: take the magnitude from one sound's wavelet transform
+    and the phase from another's, then reconstruct. The result has the timbral "shape"
+    of the first sound imposed on the temporal structure of the second —
+    a form of spectral morphing that predates modern vocoder techniques.
+  </p>
+
+  <div class="viz">
+    <canvas id="crossSynth" height="300"></canvas>
+    <div class="controls">
+      <label>Sound A
+        <select id="crossSynthA">
+          <option value="flute">Flute-like (slow attack, rich harmonics)</option>
+          <option value="bell">Bell-like (sharp attack, fast decay)</option>
+          <option value="voice">Voice-like (formants)</option>
+        </select>
+      </label>
+      <label>Sound B
+        <select id="crossSynthB">
+          <option value="bell">Bell-like (sharp attack, fast decay)</option>
+          <option value="flute">Flute-like (slow attack, rich harmonics)</option>
+          <option value="voice">Voice-like (formants)</option>
+        </select>
+      </label>
+      <label>Blend <input type="range" id="crossBlend" min="0" max="1" value="1" step="0.05"> <span id="crossBlendVal">100% A-mag</span></label>
+      <button id="playCrossA">♪ Sound A</button>
+      <button id="playCrossB">♪ Sound B</button>
+      <button id="playCrossHybrid">♪ Hybrid</button>
+    </div>
+    <div class="viz-caption">Top row: Sound A scalogram (magnitude) · Bottom row: Sound B scalogram · Middle: hybrid |W_A| × phase(W_B) — blend slider morphs between A and B magnitudes</div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- CHAPTER 7b · WAVELET DENOISING                                -->
+<!-- ============================================================ -->
+<section id="ch7b">
+  <h2><span class="num">7b</span>Wavelet Denoising</h2>
+  <p class="lead">
+    One of the most powerful practical applications of the wavelet transform:
+    separating signal from noise by selectively suppressing small wavelet coefficients,
+    while leaving large ones untouched.
+  </p>
+  <p>
+    Broadband noise appears in the wavelet domain as low-magnitude coefficients spread
+    uniformly across all scales and times. Musical signals concentrate their energy in
+    a sparse set of large coefficients. <em>Soft thresholding</em> — zeroing coefficients below
+    a threshold λ and shrinking the rest toward zero — exploits this sparsity to denoise
+    without introducing musical noise artefacts.
+  </p>
+  <div class="math">
+    W_thresh(a,b) = sign(W(a,b)) · max(0, |W(a,b)| − λ)
+  </div>
+  <p>
+    Donoho and Johnstone (1994) proved that for Gaussian noise with standard deviation σ,
+    the optimal threshold is <span class="math-inline">λ = σ√(2 log N)</span>.
+    In practice, the wavelet denoising threshold is estimated from the noise level in
+    the finest-scale coefficients, which are dominated by noise.
+  </p>
+
+  <h3>Interactive: Denoise a noisy musical signal</h3>
+  <div class="viz">
+    <canvas id="denoising" height="320"></canvas>
+    <div class="controls">
+      <label>Signal
+        <select id="denoiseSignal">
+          <option value="piano">Piano note</option>
+          <option value="vibrato">Vibrato tone</option>
+          <option value="melody">Short melody</option>
+        </select>
+      </label>
+      <label><span class="noise-badge">noise</span>Level <input type="range" id="noiseLevel" min="0" max="0.8" value="0.3" step="0.05"> <span id="noiseLevelVal">0.30</span></label>
+      <label>Threshold λ <input type="range" id="denoiseThresh" min="0" max="1" value="0.35" step="0.02"> <span id="denoiseThreshVal">0.35</span></label>
+      <button id="playNoisy">♪ Noisy</button>
+      <button id="playDenoised">♪ Denoised</button>
+      <button id="playClean">♪ Clean original</button>
+    </div>
+    <div class="viz-caption">Top: clean signal · Middle: noisy signal · Bottom: denoised — drag threshold to see how much noise is removed vs signal distortion</div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- CHAPTER 8 · LEGACY                                            -->
+<!-- ============================================================ -->
+<section id="ch8">
+  <h2><span class="num">8</span>Legacy and Continuing Impact</h2>
+  <p class="lead">
+    The Marseille group's work rippled outward in every direction — from pure mathematics
+    to MP3 compression, from medical imaging to gravitational wave detection.
+  </p>
+
+  <p>
+    Kronland-Martinet continues as Director of Research at the PRISM laboratory (CNRS / Aix-Marseille University),
+    where his group now works on sound perception, cognitive aspects of timbre,
+    and physically-informed synthesis models. The thread from 1985 continues unbroken:
+    wavelets revealed the structure of sound; the question now is how that structure
+    maps to human perception and cognition.
+  </p>
+
+  <p>
+    Alex Grossmann (1930–2019) lived to see wavelets become one of the most widely
+    used tools in applied mathematics. Born in Zagreb, a refugee from wartime Croatia,
+    he found his way through Princeton, Brandeis, and the Courant Institute
+    before settling in Marseille, where his collaboration with Morlet
+    would change signal processing forever.
+  </p>
+
+  <p>
+    The key publications from this collaboration remain foundational reading:
+  </p>
+
+  <div class="references">
+    <h3>Key References</h3>
+    <ol>
+      <li>Grossmann, A. & Morlet, J. (1984). <em>Decomposition of Hardy Functions into Square Integrable Wavelets of Constant Shape.</em> SIAM J. Math. Anal. 15, 723–736.</li>
+      <li>Goupillaud, P., Grossmann, A. & Morlet, J. (1984). <em>Cycle-Octave and Related Transforms in Seismic Signal Analysis.</em> Geoexploration, 23, 85–102.</li>
+      <li>Kronland-Martinet, R., Morlet, J. & Grossmann, A. (1987). <em>Analysis of Sound Patterns through Wavelet Transforms.</em> Int. J. Pattern Recogn. Artif. Intell., 1(2), 273–302.</li>
+      <li>Grossmann, A., Holschneider, M., Kronland-Martinet, R. & Morlet, J. (1987). <em>Detection of Abrupt Changes in Sound Signals with the Help of Wavelet Transforms.</em> Advances in Electronics and Electron Physics, Suppl. 19.</li>
+      <li>Kronland-Martinet, R. (1988). <em>The Use of the Wavelet Transform for the Analysis, Synthesis and Processing of Speech and Music Sounds.</em> Computer Music Journal, MIT Press, 12(4), 11–20.</li>
+      <li>Grossmann, A., Kronland-Martinet, R. & Morlet, J. (1989). <em>Reading and Understanding Continuous Wavelet Transforms.</em> In Combes, Grossmann & Tchamitchian (Eds.), Wavelets, Springer.</li>
+      <li>Kronland-Martinet, R. & Grossmann, A. (1990). <em>Application of Time-Frequency and Time-Scale Methods to the Analysis, Synthesis and Transformation of Natural Sounds.</em> In Roads, De Poli & Picciali (Eds.), Representations of Musical Signals, MIT Press.</li>
+    </ol>
+  </div>
+</section>
+
+<footer>
+  <p>
+    An interactive guide by
+    <a href="https://github.com/BrendanJamesLynskey/DSP_and_Music" target="_blank">BrendanJamesLynskey</a>.
+    <br>Zero dependencies — vanilla HTML, Canvas & Web Audio API.
+    <br>MIT License.
+  </p>
+</footer>
+
+<!-- ============================================================ -->
+<!-- ALL JAVASCRIPT — one monolithic block at the end               -->
+<!-- ============================================================ -->
+<script>
+(function(){
+"use strict";
+
+// ── Utilities ──────────────────────────────────────────────────
+const DPR = window.devicePixelRatio || 1;
+
+function setupCanvas(canvas, w, h) {
+  canvas.width = w * DPR;
+  canvas.height = h * DPR;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(DPR, DPR);
+  return ctx;
+}
+
+function fitCanvas(canvas) {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const w = rect.width;
+  const h = parseInt(canvas.getAttribute('height')) || 350;
+  return setupCanvas(canvas, w, h);
+}
+
+// Color maps
+function heatColor(v) {
+  v = Math.max(0, Math.min(1, v));
+  const r = Math.floor(255 * Math.min(1, v * 3));
+  const g = Math.floor(255 * Math.max(0, Math.min(1, (v - 0.33) * 3)));
+  const b = Math.floor(255 * Math.max(0, Math.min(1, (v - 0.66) * 3)));
+  return `rgb(${r},${g},${b})`;
+}
+
+function magmaColor(v) {
+  v = Math.max(0, Math.min(1, v));
+  // Simplified magma-like palette
+  const r = Math.floor(255 * Math.min(1, v * 1.5 + 0.05));
+  const g = Math.floor(255 * Math.max(0, v * v * 1.2));
+  const b = Math.floor(255 * Math.min(1, 0.15 + v * 0.6 + Math.max(0, (0.5 - v) * 1.5)));
+  return `rgb(${r},${g},${b})`;
+}
+
+// Web Audio
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playBuffer(samples, sr) {
+  const ctx = getAudioCtx();
+  const buf = ctx.createBuffer(1, samples.length, sr);
+  buf.getChannelData(0).set(samples);
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.connect(ctx.destination);
+  src.start();
+  return src;
+}
+
+function generateTone(freq, dur, sr, envelope) {
+  const N = Math.floor(dur * sr);
+  const out = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    const t = i / sr;
+    let env = 1;
+    if (envelope === 'decay') env = Math.exp(-3 * t / dur);
+    else if (envelope === 'pluck') env = Math.exp(-8 * t);
+    else if (envelope === 'adsr') {
+      const at = 0.02, dt = 0.1, sl = 0.5;
+      if (t < at) env = t / at;
+      else if (t < at + dt) env = 1 - (1 - sl) * (t - at) / dt;
+      else env = sl * Math.exp(-2 * (t - at - dt));
+    }
+    out[i] = env * Math.sin(2 * Math.PI * freq * t);
+  }
+  return out;
+}
+
+// Morlet wavelet
+function morlet(t, omega0) {
+  return Math.pow(Math.PI, -0.25) * Math.exp(-t * t / 2) * Math.cos(omega0 * t);
+}
+
+function morletComplex(t, omega0) {
+  const env = Math.pow(Math.PI, -0.25) * Math.exp(-t * t / 2);
+  return { re: env * Math.cos(omega0 * t), im: env * Math.sin(omega0 * t) };
+}
+
+// CWT computation (brute force, small signals)
+function computeCWT(signal, scales, omega0, N) {
+  N = N || signal.length;
+  const result = [];
+  for (let si = 0; si < scales.length; si++) {
+    const a = scales[si];
+    const row = new Float32Array(N);
+    for (let b = 0; b < N; b++) {
+      let re = 0, im = 0;
+      const halfW = Math.min(Math.floor(a * 6), Math.floor(N / 2));
+      for (let k = -halfW; k <= halfW; k++) {
+        const idx = b + k;
+        if (idx < 0 || idx >= signal.length) continue;
+        const t = k / a;
+        const w = morletComplex(t, omega0);
+        const s = signal[idx];
+        re += s * w.re;
+        im += s * w.im;
+      }
+      const norm = 1 / Math.sqrt(a);
+      row[b] = Math.sqrt(re * re + im * im) * norm;
+    }
+    result.push(row);
+  }
+  return result;
+}
+
+// ── HERO CANVAS ────────────────────────────────────────────────
+(function heroAnim() {
+  const canvas = document.getElementById('heroCanvas');
+  if (!canvas) return;
+  let W, H, ctx;
+  function resize() {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    ctx = setupCanvas(canvas, W, H);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  let t = 0;
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const numWaves = 5;
+    for (let w = 0; w < numWaves; w++) {
+      const scale = 1 + w * 1.5;
+      const freq = 0.5 + w * 0.3;
+      const amp = 30 + w * 15;
+      const yBase = H * 0.3 + w * H * 0.1;
+      const alpha = 0.15 + w * 0.05;
+      const hue = 30 + w * 40;
+      ctx.beginPath();
+      ctx.strokeStyle = `hsla(${hue}, 70%, 60%, ${alpha})`;
+      ctx.lineWidth = 1.5;
+      for (let x = 0; x < W; x++) {
+        const tt = (x - W / 2) / (50 * scale);
+        const env = Math.exp(-tt * tt / 2);
+        const osc = Math.sin(freq * tt * 5 + t * (0.3 + w * 0.1));
+        const y = yBase + amp * env * osc;
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    t += 0.02;
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ── CHAPTER 2: CWT vs STFT ────────────────────────────────────
+(function cwtVsStft() {
+  const canvas = document.getElementById('cwtVsStft');
+  if (!canvas) return;
+
+  const speedSlider = document.getElementById('chirpSpeed');
+  const windowSelect = document.getElementById('stftWindow');
+  const playBtn = document.getElementById('playChirp');
+
+  const SR = 512;
+  const N = 512;
+
+  function generateChirp(speed) {
+    const sig = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const t = i / N;
+      const f = 5 + speed * 40 * t * t;
+      sig[i] = Math.sin(2 * Math.PI * f * t * N / SR) * (0.5 + 0.5 * Math.sin(Math.PI * t));
+    }
+    return sig;
+  }
+
+  function computeSTFT(sig, winSize) {
+    const hop = Math.floor(winSize / 4);
+    const numFrames = Math.floor((N - winSize) / hop) + 1;
+    const numBins = Math.floor(winSize / 2);
+    const result = [];
+    for (let f = 0; f < numFrames; f++) {
+      const row = new Float32Array(numBins);
+      for (let k = 0; k < numBins; k++) {
+        let re = 0, im = 0;
+        for (let n = 0; n < winSize; n++) {
+          const w = 0.5 - 0.5 * Math.cos(2 * Math.PI * n / winSize); // Hann
+          const s = sig[f * hop + n] * w;
+          re += s * Math.cos(-2 * Math.PI * k * n / winSize);
+          im += s * Math.sin(-2 * Math.PI * k * n / winSize);
+        }
+        row[k] = Math.sqrt(re * re + im * im);
+      }
+      result.push(row);
+    }
+    return { data: result, numFrames, numBins };
+  }
+
+  function draw() {
+    const W = canvas.parentElement.getBoundingClientRect().width;
+    const H = 350;
+    const ctx = fitCanvas(canvas);
+    const hw = W / 2 - 10;
+
+    const speed = parseFloat(speedSlider.value);
+    const winSize = parseInt(windowSelect.value);
+    const sig = generateChirp(speed);
+
+    // STFT
+    const stft = computeSTFT(sig, winSize);
+    let maxS = 0;
+    stft.data.forEach(row => row.forEach(v => { if (v > maxS) maxS = v; }));
+
+    // CWT
+    const numScales = 40;
+    const scales = [];
+    for (let i = 0; i < numScales; i++) scales.push(2 + i * 1.5);
+    const cwt = computeCWT(sig, scales, 5, N);
+    let maxC = 0;
+    cwt.forEach(row => row.forEach(v => { if (v > maxC) maxC = v; }));
+
+    // Draw waveform
+    const waveH = 60;
+    ctx.fillStyle = '#0a0b0f';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.strokeStyle = '#4a9de8';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const x = (i / N) * W;
+      const y = waveH / 2 + sig[i] * waveH * 0.4;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#8a8d9a';
+    ctx.font = '11px monospace';
+    ctx.fillText('STFT Spectrogram', 10, waveH + 15);
+    ctx.fillText('CWT Scalogram', hw + 20, waveH + 15);
+
+    const plotY = waveH + 22;
+    const plotH = H - plotY - 5;
+
+    // STFT plot
+    const stftCellW = hw / stft.numFrames;
+    const stftCellH = plotH / stft.numBins;
+    for (let f = 0; f < stft.numFrames; f++) {
+      for (let k = 0; k < stft.numBins; k++) {
+        const v = stft.data[f][k] / (maxS || 1);
+        ctx.fillStyle = magmaColor(Math.pow(v, 0.5));
+        ctx.fillRect(f * stftCellW, plotY + plotH - (k + 1) * stftCellH, stftCellW + 1, stftCellH + 1);
+      }
+    }
+
+    // CWT plot
+    const cwtCellW = hw / N;
+    const cwtCellH = plotH / numScales;
+    for (let si = 0; si < numScales; si++) {
+      for (let b = 0; b < N; b++) {
+        const v = cwt[si][b] / (maxC || 1);
+        ctx.fillStyle = magmaColor(Math.pow(v, 0.5));
+        ctx.fillRect(hw + 20 + b * cwtCellW, plotY + si * cwtCellH, cwtCellW + 1, cwtCellH + 1);
+      }
+    }
+
+    // Divider
+    ctx.strokeStyle = '#2a2d3a';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(hw + 10, plotY);
+    ctx.lineTo(hw + 10, H);
+    ctx.stroke();
+  }
+
+  draw();
+  speedSlider.addEventListener('input', draw);
+  windowSelect.addEventListener('change', draw);
+  window.addEventListener('resize', draw);
+
+  playBtn.addEventListener('click', () => {
+    const speed = parseFloat(speedSlider.value);
+    const dur = 2;
+    const sr = 44100;
+    const samples = new Float32Array(sr * dur);
+    for (let i = 0; i < samples.length; i++) {
+      const t = i / sr;
+      const f = 200 + speed * 800 * (t / dur) * (t / dur);
+      samples[i] = 0.3 * Math.sin(2 * Math.PI * f * t) * (0.5 + 0.5 * Math.sin(Math.PI * t / dur));
+    }
+    playBuffer(samples, sr);
+  });
+})();
+
+// ── CHAPTER 3: Morlet Explorer ─────────────────────────────────
+(function morletExplore() {
+  const canvas = document.getElementById('morletExplorer');
+  if (!canvas) return;
+
+  const omegaSlider = document.getElementById('morletOmega');
+  const scaleSlider = document.getElementById('morletScale');
+  const omegaVal = document.getElementById('morletOmegaVal');
+  const scaleVal = document.getElementById('morletScaleVal');
+  const playBtn = document.getElementById('playMorlet');
+
+  function draw() {
+    const W = canvas.parentElement.getBoundingClientRect().width;
+    const H = 300;
+    const ctx = fitCanvas(canvas);
+
+    const omega0 = parseFloat(omegaSlider.value);
+    const scale = parseFloat(scaleSlider.value);
+    omegaVal.textContent = omega0.toFixed(1);
+    scaleVal.textContent = scale.toFixed(1);
+
+    ctx.fillStyle = '#0a0b0f';
+    ctx.fillRect(0, 0, W, H);
+
+    const topH = H * 0.55;
+    const botH = H * 0.4;
+    const botY = topH + H * 0.05;
+
+    // Time-domain wavelet
+    const N = 512;
+    const tRange = 8 * scale;
+
+    // Real part
+    ctx.strokeStyle = '#4a9de8';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const t = (i / N - 0.5) * 2 * tRange;
+      const ts = t / scale;
+      const v = morlet(ts, omega0) / Math.sqrt(scale);
+      const x = (i / N) * W;
+      const y = topH / 2 - v * topH * 0.35;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Envelope
+    ctx.strokeStyle = '#e8a44a';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const t = (i / N - 0.5) * 2 * tRange;
+      const ts = t / scale;
+      const env = Math.pow(Math.PI, -0.25) * Math.exp(-ts * ts / 2) / Math.sqrt(scale);
+      const x = (i / N) * W;
+      const y = topH / 2 - env * topH * 0.35;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const t = (i / N - 0.5) * 2 * tRange;
+      const ts = t / scale;
+      const env = -Math.pow(Math.PI, -0.25) * Math.exp(-ts * ts / 2) / Math.sqrt(scale);
+      const x = (i / N) * W;
+      const y = topH / 2 - env * topH * 0.35;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Frequency domain — compute DFT magnitude
+    const freqN = 256;
+    const mag = new Float32Array(freqN);
+    let maxMag = 0;
+    for (let k = 0; k < freqN; k++) {
+      let re = 0, im = 0;
+      const omega = k * 0.15;
+      for (let i = 0; i < N; i++) {
+        const t = (i / N - 0.5) * 2 * tRange;
+        const ts = t / scale;
+        const v = morlet(ts, omega0) / Math.sqrt(scale);
+        re += v * Math.cos(omega * t) * (2 * tRange / N);
+        im += v * Math.sin(omega * t) * (2 * tRange / N);
+      }
+      mag[k] = Math.sqrt(re * re + im * im);
+      if (mag[k] > maxMag) maxMag = mag[k];
+    }
+
+    ctx.strokeStyle = '#5ce89a';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let k = 0; k < freqN; k++) {
+      const x = (k / freqN) * W;
+      const y = botY + botH - (mag[k] / (maxMag || 1)) * botH * 0.85;
+      if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Axes labels
+    ctx.fillStyle = '#8a8d9a';
+    ctx.font = '10px monospace';
+    ctx.fillText('Time →', W - 50, topH - 5);
+    ctx.fillText('Frequency →', W - 80, botY + botH - 5);
+    ctx.fillText('Real part', 5, 12);
+    ctx.fillText('|Ψ(ω)|', 5, botY + 12);
+
+    // Zero line
+    ctx.strokeStyle = '#2a2d3a';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, topH / 2);
+    ctx.lineTo(W, topH / 2);
+    ctx.stroke();
+  }
+
+  draw();
+  omegaSlider.addEventListener('input', draw);
+  scaleSlider.addEventListener('input', draw);
+  window.addEventListener('resize', draw);
+
+  playBtn.addEventListener('click', () => {
+    const omega0 = parseFloat(omegaSlider.value);
+    const scale = parseFloat(scaleSlider.value);
+    const sr = 44100;
+    const dur = 0.5 * scale;
+    const N = Math.floor(dur * sr);
+    const samples = new Float32Array(N);
+    const freq = omega0 * sr / (2 * Math.PI * scale * 10);
+    for (let i = 0; i < N; i++) {
+      const t = (i / N - 0.5) * 2;
+      samples[i] = 0.4 * Math.exp(-t * t * 4) * Math.sin(2 * Math.PI * freq * i / sr);
+    }
+    playBuffer(samples, sr);
+  });
+})();
+
+// ── CHAPTER 4: Scalogram Builder ───────────────────────────────
+(function scalogramBuild() {
+  const canvas = document.getElementById('scalogramBuilder');
+  if (!canvas) return;
+
+  const sigSelect = document.getElementById('scalogramSignal');
+  const buildBtn = document.getElementById('buildScalogram');
+  const playBtn = document.getElementById('playScalogramSound');
+
+  const N = 256;
+  const numScales = 40;
+  const omega0 = 5;
+
+  function makeSignal(type) {
+    const sig = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const t = i / N;
+      switch (type) {
+        case 'piano':
+          for (let h = 1; h <= 8; h++) {
+            sig[i] += (1 / h) * Math.exp(-h * 3 * t) * Math.sin(2 * Math.PI * 8 * h * t);
+          }
+          break;
+        case 'chirp':
+          sig[i] = Math.sin(2 * Math.PI * (5 + 30 * t * t) * t) * (0.5 + 0.5 * Math.sin(Math.PI * t));
+          break;
+        case 'vibrato':
+          sig[i] = Math.sin(2 * Math.PI * (15 + 3 * Math.sin(2 * Math.PI * 4 * t)) * t) * Math.exp(-t * 2);
+          break;
+        case 'attack':
+          if (t < 0.05) sig[i] = (Math.random() - 0.5) * 2 * (1 - t / 0.05);
+          sig[i] += Math.sin(2 * Math.PI * 12 * t) * Math.max(0, Math.min(1, t / 0.05)) * Math.exp(-t * 3);
+          break;
+        case 'two_notes':
+          if (t < 0.5) sig[i] = Math.sin(2 * Math.PI * 10 * t) * Math.exp(-t * 4);
+          else sig[i] = Math.sin(2 * Math.PI * 15 * (t - 0.5)) * Math.exp(-(t - 0.5) * 4);
+          break;
+      }
+    }
+    return sig;
+  }
+
+  let currentSig = makeSignal('piano');
+  let cwtData = null;
+  let animRow = 0;
+  let animId = null;
+
+  const scales = [];
+  for (let i = 0; i < numScales; i++) scales.push(2 + i * 1.5);
+
+  function drawFrame() {
+    const W = canvas.parentElement.getBoundingClientRect().width;
+    const H = 400;
+    const ctx = fitCanvas(canvas);
+
+    const waveH = 80;
+    const plotY = waveH + 5;
+    const plotH = H - plotY;
+
+    ctx.fillStyle = '#0a0b0f';
+    ctx.fillRect(0, 0, W, H);
+
+    // Waveform
+    ctx.strokeStyle = '#4a9de8';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    let maxSig = 0;
+    currentSig.forEach(v => { if (Math.abs(v) > maxSig) maxSig = Math.abs(v); });
+    for (let i = 0; i < N; i++) {
+      const x = (i / N) * W;
+      const y = waveH / 2 + (currentSig[i] / (maxSig || 1)) * waveH * 0.4;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Scalogram (rows up to animRow)
+    if (cwtData) {
+      let maxC = 0;
+      cwtData.forEach(row => { if (row) row.forEach(v => { if (v > maxC) maxC = v; }); });
+      const cellW = W / N;
+      const cellH = plotH / numScales;
+      for (let si = 0; si <= Math.min(animRow, numScales - 1); si++) {
+        if (!cwtData[si]) continue;
+        for (let b = 0; b < N; b++) {
+          const v = cwtData[si][b] / (maxC || 1);
+          ctx.fillStyle = magmaColor(Math.pow(v, 0.6));
+          ctx.fillRect(b * cellW, plotY + si * cellH, cellW + 1, cellH + 1);
+        }
+      }
+
+      // Scanning line
+      if (animRow < numScales) {
+        ctx.strokeStyle = '#e8a44a';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, plotY + animRow * cellH);
+        ctx.lineTo(W, plotY + animRow * cellH);
+        ctx.stroke();
+      }
+    }
+
+    // Labels
+    ctx.fillStyle = '#8a8d9a';
+    ctx.font = '10px monospace';
+    ctx.fillText('Low freq (large scale) →', 5, plotY + 12);
+    ctx.fillText('High freq (small scale)', 5, plotY + plotH - 5);
+  }
+
+  function startBuild() {
+    if (animId) cancelAnimationFrame(animId);
+    currentSig = makeSignal(sigSelect.value);
+    cwtData = [];
+    animRow = 0;
+
+    function step() {
+      if (animRow < numScales) {
+        const a = scales[animRow];
+        const row = new Float32Array(N);
+        for (let b = 0; b < N; b++) {
+          let re = 0, im = 0;
+          const halfW = Math.min(Math.floor(a * 5), Math.floor(N / 2));
+          for (let k = -halfW; k <= halfW; k++) {
+            const idx = b + k;
+            if (idx < 0 || idx >= N) continue;
+            const t = k / a;
+            const w = morletComplex(t, omega0);
+            re += currentSig[idx] * w.re;
+            im += currentSig[idx] * w.im;
+          }
+          row[b] = Math.sqrt(re * re + im * im) / Math.sqrt(a);
+        }
+        cwtData[animRow] = row;
+        animRow++;
+        drawFrame();
+        animId = requestAnimationFrame(step);
+      } else {
+        drawFrame();
+      }
+    }
+    step();
+  }
+
+  drawFrame();
+  buildBtn.addEventListener('click', startBuild);
+  sigSelect.addEventListener('change', () => {
+    currentSig = makeSignal(sigSelect.value);
+    cwtData = null;
+    animRow = 0;
+    drawFrame();
+  });
+
+  playBtn.addEventListener('click', () => {
+    const sr = 44100;
+    const dur = 2;
+    const type = sigSelect.value;
+    const samples = new Float32Array(sr * dur);
+    for (let i = 0; i < samples.length; i++) {
+      const t = i / sr;
+      const tn = t / dur;
+      switch (type) {
+        case 'piano':
+          for (let h = 1; h <= 8; h++)
+            samples[i] += 0.1 * (1/h) * Math.exp(-h*2*t) * Math.sin(2*Math.PI*220*h*t);
+          break;
+        case 'chirp':
+          samples[i] = 0.3 * Math.sin(2*Math.PI*(200+1000*tn*tn)*t) * (0.5+0.5*Math.sin(Math.PI*tn));
+          break;
+        case 'vibrato':
+          samples[i] = 0.3 * Math.sin(2*Math.PI*(440+30*Math.sin(2*Math.PI*5*t))*t) * Math.exp(-t);
+          break;
+        case 'attack':
+          if (t < 0.03) samples[i] = 0.5*(Math.random()-0.5)*(1-t/0.03);
+          samples[i] += 0.3*Math.sin(2*Math.PI*330*t)*Math.max(0,Math.min(1,t/0.03))*Math.exp(-t*2);
+          break;
+        case 'two_notes':
+          if (t < 1) samples[i] = 0.3*Math.sin(2*Math.PI*330*t)*Math.exp(-t*3);
+          else samples[i] = 0.3*Math.sin(2*Math.PI*440*(t-1))*Math.exp(-(t-1)*3);
+          break;
+      }
+    }
+    playBuffer(samples, sr);
+  });
+  window.addEventListener('resize', drawFrame);
+})();
+
+// ── CHAPTER 4: Ridge Extraction ────────────────────────────────
+(function ridgeExtract() {
+  const canvas = document.getElementById('ridgeExtraction');
+  if (!canvas) return;
+
+  const rateSlider = document.getElementById('vibratoRate');
+  const depthSlider = document.getElementById('vibratoDepth');
+  const rateVal = document.getElementById('vibratoRateVal');
+  const depthVal = document.getElementById('vibratoDepthVal');
+  const playBtn = document.getElementById('playVibrato');
+
+  const N = 256;
+  const numScales = 50;
+  const omega0 = 6;
+
+  function draw() {
+    const W = canvas.parentElement.getBoundingClientRect().width;
+    const H = 300;
+    const ctx = fitCanvas(canvas);
+
+    const rate = parseFloat(rateSlider.value);
+    const depth = parseFloat(depthSlider.value);
+    rateVal.textContent = rate.toFixed(1) + ' Hz';
+    depthVal.textContent = depth + ' Hz';
+
+    // Generate vibrato signal
+    const sig = new Float32Array(N);
+    const centreFreq = 20; // in signal-domain units
+    for (let i = 0; i < N; i++) {
+      const t = i / N;
+      const f = centreFreq + (depth / 10) * Math.sin(2 * Math.PI * rate * t);
+      sig[i] = Math.sin(2 * Math.PI * f * t) * Math.exp(-t);
+    }
+
+    // CWT
+    const scales = [];
+    for (let i = 0; i < numScales; i++) scales.push(1.5 + i * 1.2);
+    const cwt = computeCWT(sig, scales, omega0, N);
+
+    let maxC = 0;
+    cwt.forEach(r => r.forEach(v => { if (v > maxC) maxC = v; }));
+
+    ctx.fillStyle = '#0a0b0f';
+    ctx.fillRect(0, 0, W, H);
+
+    // Draw scalogram
+    const cellW = W / N;
+    const cellH = H / numScales;
+    for (let si = 0; si < numScales; si++) {
+      for (let b = 0; b < N; b++) {
+        const v = cwt[si][b] / (maxC || 1);
+        ctx.fillStyle = magmaColor(Math.pow(v, 0.6));
+        ctx.fillRect(b * cellW, si * cellH, cellW + 1, cellH + 1);
+      }
+    }
+
+    // Extract and draw ridge
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let b = 0; b < N; b++) {
+      let maxVal = 0, maxSi = 0;
+      for (let si = 0; si < numScales; si++) {
+        if (cwt[si][b] > maxVal) { maxVal = cwt[si][b]; maxSi = si; }
+      }
+      const x = (b + 0.5) * cellW;
+      const y = (maxSi + 0.5) * cellH;
+      if (b === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    ctx.fillStyle = '#e8a44a';
+    ctx.font = '10px monospace';
+    ctx.fillText('Ridge = instantaneous frequency estimate', 10, H - 8);
+  }
+
+  draw();
+  rateSlider.addEventListener('input', draw);
+  depthSlider.addEventListener('input', draw);
+  window.addEventListener('resize', draw);
+
+  playBtn.addEventListener('click', () => {
+    const sr = 44100;
+    const dur = 2;
+    const rate = parseFloat(rateSlider.value);
+    const depth = parseFloat(depthSlider.value);
+    const samples = new Float32Array(sr * dur);
+    for (let i = 0; i < samples.length; i++) {
+      const t = i / sr;
+      samples[i] = 0.3 * Math.sin(2*Math.PI*(440+depth*Math.sin(2*Math.PI*rate*t))*t) * Math.exp(-t*0.5);
+    }
+    playBuffer(samples, sr);
+  });
+})();
+
+// ── CHAPTER 5: Resynthesis ─────────────────────────────────────
+(function resynth() {
+  const canvas = document.getElementById('resynthesis');
+  if (!canvas) return;
+
+  const partialsSlider = document.getElementById('numPartials');
+  const decaySlider = document.getElementById('decayRate');
+  const partialsVal = document.getElementById('numPartialsVal');
+  const decayRateVal = document.getElementById('decayRateVal');
+  const playOrigBtn = document.getElementById('playOrigSynth');
+  const playResynthBtn = document.getElementById('playResynth');
+
+  const N = 256;
+
+  function draw() {
+    const W = canvas.parentElement.getBoundingClientRect().width;
+    const H = 350;
+    const ctx = fitCanvas(canvas);
+
+    const nPartials = parseInt(partialsSlider.value);
+    const decay = parseInt(decaySlider.value);
+    partialsVal.textContent = nPartials;
+    decayRateVal.textContent = decay;
+
+    // Generate signal with harmonics
+    const sig = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const t = i / N;
+      for (let h = 1; h <= 16; h++) {
+        sig[i] += (1 / h) * Math.exp(-h * decay * 0.3 * t) * Math.sin(2 * Math.PI * 6 * h * t);
+      }
+    }
+
+    // Resynthesised with limited partials
+    const resynSig = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const t = i / N;
+      for (let h = 1; h <= nPartials; h++) {
+        resynSig[i] += (1 / h) * Math.exp(-h * decay * 0.3 * t) * Math.sin(2 * Math.PI * 6 * h * t);
+      }
+    }
+
+    ctx.fillStyle = '#0a0b0f';
+    ctx.fillRect(0, 0, W, H);
+
+    const rowH = H / 3 - 5;
+
+    let maxSig = 0;
+    sig.forEach(v => { if (Math.abs(v) > maxSig) maxSig = Math.abs(v); });
+
+    // Original
+    ctx.strokeStyle = '#4a9de8';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const x = (i / N) * W;
+      const y = rowH / 2 + (sig[i] / maxSig) * rowH * 0.4;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Partial envelopes
+    const midY = rowH + 5;
+    for (let h = 1; h <= nPartials; h++) {
+      const hue = (h / nPartials) * 280;
+      ctx.strokeStyle = `hsla(${hue}, 70%, 60%, 0.7)`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 0; i < N; i++) {
+        const t = i / N;
+        const env = (1 / h) * Math.exp(-h * decay * 0.3 * t);
+        const x = (i / N) * W;
+        const y = midY + rowH / 2 - env * rowH * 0.4;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // Resynthesised
+    const botY = 2 * (rowH + 5);
+    let maxR = 0;
+    resynSig.forEach(v => { if (Math.abs(v) > maxR) maxR = Math.abs(v); });
+    ctx.strokeStyle = '#5ce89a';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const x = (i / N) * W;
+      const y = botY + rowH / 2 + (resynSig[i] / (maxR || 1)) * rowH * 0.4;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#8a8d9a';
+    ctx.font = '10px monospace';
+    ctx.fillText('Original (16 partials)', 5, 12);
+    ctx.fillText(`Extracted envelopes (${nPartials} partials)`, 5, midY + 12);
+    ctx.fillText(`Resynthesised (${nPartials} partials)`, 5, botY + 12);
+  }
+
+  draw();
+  partialsSlider.addEventListener('input', draw);
+  decaySlider.addEventListener('input', draw);
+  window.addEventListener('resize', draw);
+
+  function makeSound(nPartials, decay) {
+    const sr = 44100;
+    const dur = 2;
+    const samples = new Float32Array(sr * dur);
+    const f0 = 220;
+    for (let i = 0; i < samples.length; i++) {
+      const t = i / sr;
+      for (let h = 1; h <= nPartials; h++) {
+        samples[i] += 0.08 * (1/h) * Math.exp(-h*decay*0.15*t) * Math.sin(2*Math.PI*f0*h*t);
+      }
+    }
+    return samples;
+  }
+
+  playOrigBtn.addEventListener('click', () => {
+    playBuffer(makeSound(16, parseInt(decaySlider.value)), 44100);
+  });
+  playResynthBtn.addEventListener('click', () => {
+    playBuffer(makeSound(parseInt(partialsSlider.value), parseInt(decaySlider.value)), 44100);
+  });
+})();
+
+// ── CHAPTER 6: Transient Detection ─────────────────────────────
+(function transientDet() {
+  const canvas = document.getElementById('transientDetect');
+  if (!canvas) return;
+
+  const sigSelect = document.getElementById('transientSignal');
+  const buildBtn = document.getElementById('buildTransient');
+  const playBtn = document.getElementById('playTransient');
+
+  const N = 256;
+  const numScales = 40;
+  const omega0 = 5;
+
+  function makeSignal(type) {
+    const sig = new Float32Array(N);
+    switch (type) {
+      case 'clicks':
+        for (let i = 0; i < N; i++) sig[i] = (Math.random() - 0.5) * 0.1;
+        [64, 128, 192].forEach(pos => {
+          for (let k = -2; k <= 2; k++) {
+            if (pos+k >= 0 && pos+k < N) sig[pos+k] = (1 - Math.abs(k)/3);
+          }
+        });
+        break;
+      case 'onset':
+        for (let i = 0; i < N; i++) {
+          const t = i / N;
+          if (t < 0.3) sig[i] = 0;
+          else if (t < 0.35) sig[i] = (Math.random()-0.5) * 2 * (1-(t-0.3)/0.05) + Math.sin(2*Math.PI*12*t)*((t-0.3)/0.05);
+          else sig[i] = Math.sin(2*Math.PI*12*t) * Math.exp(-(t-0.35)*3);
+        }
+        break;
+      case 'speech':
+        for (let i = 0; i < N; i++) {
+          const t = i / N;
+          // Simulated syllables with bursts
+          if (t < 0.25) sig[i] = Math.sin(2*Math.PI*8*t) * Math.sin(Math.PI*t/0.25) * 0.5;
+          else if (t < 0.3) sig[i] = (Math.random()-0.5) * 0.8;
+          else if (t < 0.6) sig[i] = Math.sin(2*Math.PI*12*(t-0.3)) * Math.sin(Math.PI*(t-0.3)/0.3) * 0.5;
+          else if (t < 0.65) sig[i] = (Math.random()-0.5) * 0.8;
+          else sig[i] = Math.sin(2*Math.PI*10*(t-0.65)) * Math.exp(-(t-0.65)*4) * 0.5;
+        }
+        break;
+    }
+    return sig;
+  }
+
+  let currentSig = makeSignal('clicks');
+
+  function drawAnalysis() {
+    const W = canvas.parentElement.getBoundingClientRect().width;
+    const H = 350;
+    const ctx = fitCanvas(canvas);
+
+    const waveH = 80;
+    const plotY = waveH + 5;
+    const plotH = H - plotY;
+
+    currentSig = makeSignal(sigSelect.value);
+
+    const scales = [];
+    for (let i = 0; i < numScales; i++) scales.push(1.5 + i * 1.5);
+    const cwt = computeCWT(currentSig, scales, omega0, N);
+
+    let maxC = 0;
+    cwt.forEach(r => r.forEach(v => { if (v > maxC) maxC = v; }));
+
+    ctx.fillStyle = '#0a0b0f';
+    ctx.fillRect(0, 0, W, H);
+
+    // Waveform
+    let maxS = 0;
+    currentSig.forEach(v => { if (Math.abs(v) > maxS) maxS = Math.abs(v); });
+    ctx.strokeStyle = '#e85a7a';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const x = (i / N) * W;
+      const y = waveH / 2 + (currentSig[i] / (maxS || 1)) * waveH * 0.4;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Scalogram
+    const cellW = W / N;
+    const cellH = plotH / numScales;
+    for (let si = 0; si < numScales; si++) {
+      for (let b = 0; b < N; b++) {
+        const v = cwt[si][b] / (maxC || 1);
+        ctx.fillStyle = magmaColor(Math.pow(v, 0.6));
+        ctx.fillRect(b * cellW, plotY + si * cellH, cellW + 1, cellH + 1);
+      }
+    }
+
+    // Detect and mark transients (sum across scales)
+    const energy = new Float32Array(N);
+    let maxE = 0;
+    for (let b = 0; b < N; b++) {
+      for (let si = 0; si < numScales; si++) energy[b] += cwt[si][b];
+      if (energy[b] > maxE) maxE = energy[b];
+    }
+    const threshold = maxE * 0.6;
+    ctx.strokeStyle = 'rgba(232,164,74,0.6)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    for (let b = 1; b < N - 1; b++) {
+      if (energy[b] > threshold && energy[b] > energy[b-1] && energy[b] > energy[b+1]) {
+        const x = (b + 0.5) * cellW;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, H);
+        ctx.stroke();
+      }
+    }
+    ctx.setLineDash([]);
+  }
+
+  drawAnalysis();
+  buildBtn.addEventListener('click', drawAnalysis);
+  sigSelect.addEventListener('change', drawAnalysis);
+  window.addEventListener('resize', drawAnalysis);
+
+  playBtn.addEventListener('click', () => {
+    const sr = 44100;
+    const dur = 2;
+    const type = sigSelect.value;
+    const samples = new Float32Array(sr * dur);
+    switch (type) {
+      case 'clicks':
+        for (let i = 0; i < samples.length; i++) samples[i] = (Math.random()-0.5)*0.02;
+        [0.25,0.5,0.75].forEach(t => {
+          const pos = Math.floor(t*sr*dur);
+          for (let k = -50; k <= 50; k++) {
+            const idx = pos+k;
+            if (idx >= 0 && idx < samples.length) samples[idx] += 0.5*Math.exp(-Math.abs(k)/10);
+          }
+        });
+        break;
+      case 'onset':
+        for (let i = 0; i < samples.length; i++) {
+          const t = i/sr;
+          if (t > 0.5 && t < 0.55) samples[i] = (Math.random()-0.5)*0.6;
+          if (t >= 0.55) samples[i] = 0.3*Math.sin(2*Math.PI*330*t)*Math.exp(-(t-0.55)*3);
+        }
+        break;
+      case 'speech':
+        for (let i = 0; i < samples.length; i++) {
+          const t = i/sr;
+          if (t<0.4) samples[i]=0.3*Math.sin(2*Math.PI*250*t)*Math.sin(Math.PI*t/0.4);
+          else if(t<0.5) samples[i]=(Math.random()-0.5)*0.4;
+          else if(t<1) samples[i]=0.3*Math.sin(2*Math.PI*350*(t-0.5))*Math.sin(Math.PI*(t-0.5)/0.5);
+          else if(t<1.1) samples[i]=(Math.random()-0.5)*0.4;
+          else samples[i]=0.3*Math.sin(2*Math.PI*280*(t-1.1))*Math.exp(-(t-1.1)*3);
+        }
+        break;
+    }
+    playBuffer(samples, sr);
+  });
+})();
+
+// ── CHAPTER 7: Time Stretching ─────────────────────────────────
+(function timeStretchViz() {
+  const canvas = document.getElementById('timeStretch');
+  if (!canvas) return;
+
+  const stretchSlider = document.getElementById('stretchFactor');
+  const stretchVal = document.getElementById('stretchFactorVal');
+  const playOrigBtn = document.getElementById('playOrigStretch');
+  const playStretchedBtn = document.getElementById('playStretched');
+
+  const N = 200;
+
+  function draw() {
+    const W = canvas.parentElement.getBoundingClientRect().width;
+    const H = 250;
+    const ctx = fitCanvas(canvas);
+
+    const factor = parseFloat(stretchSlider.value);
+    stretchVal.textContent = factor.toFixed(1) + '×';
+
+    ctx.fillStyle = '#0a0b0f';
+    ctx.fillRect(0, 0, W, H);
+
+    const rowH = H / 2 - 5;
+
+    // Original
+    const sig = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const t = i / N;
+      sig[i] = Math.sin(2 * Math.PI * 8 * t) * Math.exp(-t * 3) * (1 - Math.exp(-t * 20));
+    }
+
+    let maxS = 0;
+    sig.forEach(v => { if (Math.abs(v) > maxS) maxS = Math.abs(v); });
+
+    ctx.strokeStyle = '#4a9de8';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const x = (i / N) * W;
+      const y = rowH / 2 + (sig[i] / maxS) * rowH * 0.4;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Stretched
+    const stretchedN = Math.floor(N * factor);
+    const stretched = new Float32Array(stretchedN);
+    for (let i = 0; i < stretchedN; i++) {
+      const origIdx = i / factor;
+      const idx0 = Math.floor(origIdx);
+      const frac = origIdx - idx0;
+      const v0 = idx0 < N ? sig[idx0] : 0;
+      const v1 = idx0 + 1 < N ? sig[idx0 + 1] : 0;
+      stretched[i] = v0 + frac * (v1 - v0);
+    }
+
+    const botY = rowH + 10;
+    ctx.strokeStyle = '#5ce89a';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < stretchedN; i++) {
+      const x = (i / stretchedN) * W;
+      const y = botY + rowH / 2 + (stretched[i] / maxS) * rowH * 0.4;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Duration indicators
+    ctx.fillStyle = '#8a8d9a';
+    ctx.font = '10px monospace';
+    ctx.fillText('Original', 5, 12);
+    ctx.fillText(`Stretched ${factor.toFixed(1)}×`, 5, botY + 12);
+
+    // Duration bars
+    const origDur = W * 0.8;
+    const stretchDur = Math.min(W, origDur * factor);
+    ctx.fillStyle = 'rgba(74,157,232,0.3)';
+    ctx.fillRect(W * 0.1, rowH - 5, origDur, 3);
+    ctx.fillStyle = 'rgba(92,232,154,0.3)';
+    ctx.fillRect(W * 0.1, botY + rowH - 5, stretchDur, 3);
+  }
+
+  draw();
+  stretchSlider.addEventListener('input', draw);
+  window.addEventListener('resize', draw);
+
+  function makeOrigSound() {
+    const sr = 44100;
+    const dur = 1;
+    const samples = new Float32Array(sr * dur);
+    for (let i = 0; i < samples.length; i++) {
+      const t = i / sr;
+      for (let h = 1; h <= 6; h++)
+        samples[i] += 0.08*(1/h)*Math.exp(-h*3*t)*Math.sin(2*Math.PI*220*h*t)*(1-Math.exp(-t*100));
+    }
+    return samples;
+  }
+
+  playOrigBtn.addEventListener('click', () => playBuffer(makeOrigSound(), 44100));
+  playStretchedBtn.addEventListener('click', () => {
+    const factor = parseFloat(stretchSlider.value);
+    const orig = makeOrigSound();
+    const sr = 44100;
+    const newLen = Math.floor(orig.length * factor);
+    const stretched = new Float32Array(newLen);
+    // Simple time-stretch by interpolation (keeps pitch approximately constant for small stretches)
+    for (let i = 0; i < newLen; i++) {
+      const origIdx = i / factor;
+      const idx0 = Math.floor(origIdx);
+      const frac = origIdx - idx0;
+      const v0 = idx0 < orig.length ? orig[idx0] : 0;
+      const v1 = idx0+1 < orig.length ? orig[idx0+1] : 0;
+      stretched[i] = v0 + frac*(v1-v0);
+    }
+    playBuffer(stretched, sr);
+  });
+})();
+
+// ── CHAPTER 7: Wavelet Filtering ───────────────────────────────
+(function waveletFilt() {
+  const canvas = document.getElementById('waveletFilter');
+  if (!canvas) return;
+
+  const filterSelect = document.getElementById('filterType');
+  const cutoffSlider = document.getElementById('filterCutoff');
+  const cutoffVal = document.getElementById('filterCutoffVal');
+  const playUnfiltBtn = document.getElementById('playUnfiltered');
+  const playFiltBtn = document.getElementById('playFiltered');
+
+  const N = 200;
+  const numScales = 40;
+  const omega0 = 5;
+
+  function draw() {
+    const W = canvas.parentElement.getBoundingClientRect().width;
+    const H = 300;
+    const ctx = fitCanvas(canvas);
+
+    const filterType = filterSelect.value;
+    const cutoff = parseInt(cutoffSlider.value);
+    cutoffVal.textContent = cutoff;
+
+    // Signal
+    const sig = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const t = i / N;
+      for (let h = 1; h <= 8; h++)
+        sig[i] += (1/h)*Math.exp(-h*2*t)*Math.sin(2*Math.PI*5*h*t);
+    }
+
+    const scales = [];
+    for (let i = 0; i < numScales; i++) scales.push(1.5 + i * 1.5);
+    const cwt = computeCWT(sig, scales, omega0, N);
+
+    let maxC = 0;
+    cwt.forEach(r => r.forEach(v => { if (v > maxC) maxC = v; }));
+
+    ctx.fillStyle = '#0a0b0f';
+    ctx.fillRect(0, 0, W, H);
+
+    const halfH = H / 2 - 2;
+    const cellW = W / N;
+    const cellH = halfH / numScales;
+
+    // Original scalogram (top)
+    for (let si = 0; si < numScales; si++) {
+      for (let b = 0; b < N; b++) {
+        const v = cwt[si][b] / (maxC || 1);
+        ctx.fillStyle = magmaColor(Math.pow(v, 0.6));
+        ctx.fillRect(b * cellW, si * cellH, cellW + 1, cellH + 1);
+      }
+    }
+
+    // Filtered scalogram (bottom)
+    const botY = halfH + 4;
+    for (let si = 0; si < numScales; si++) {
+      let pass = true;
+      switch (filterType) {
+        case 'lowpass': pass = si < cutoff; break;
+        case 'highpass': pass = si >= cutoff; break;
+        case 'bandpass': pass = si >= cutoff - 8 && si < cutoff + 8; break;
+        case 'notch': pass = !(si >= cutoff - 5 && si < cutoff + 5); break;
+      }
+      for (let b = 0; b < N; b++) {
+        const v = pass ? cwt[si][b] / (maxC || 1) : 0;
+        ctx.fillStyle = pass ? magmaColor(Math.pow(v, 0.6)) : '#08090d';
+        ctx.fillRect(b * cellW, botY + si * cellH, cellW + 1, cellH + 1);
+      }
+    }
+
+    // Divider
+    ctx.strokeStyle = '#e8a44a';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, halfH + 2);
+    ctx.lineTo(W, halfH + 2);
+    ctx.stroke();
+
+    ctx.fillStyle = '#8a8d9a';
+    ctx.font = '10px monospace';
+    ctx.fillText('Original', 5, 12);
+    ctx.fillText('Filtered', 5, botY + 12);
+  }
+
+  draw();
+  filterSelect.addEventListener('change', draw);
+  cutoffSlider.addEventListener('input', draw);
+  window.addEventListener('resize', draw);
+
+  function makeFilteredSound(doFilter) {
+    const sr = 44100;
+    const dur = 2;
+    const f0 = 220;
+    const nHarm = 8;
+    const cutoff = parseInt(cutoffSlider.value);
+    const filterType = filterSelect.value;
+    const samples = new Float32Array(sr * dur);
+    for (let h = 1; h <= nHarm; h++) {
+      const si = Math.floor((h / nHarm) * 40);
+      let pass = true;
+      if (doFilter) {
+        switch (filterType) {
+          case 'lowpass': pass = si < cutoff; break;
+          case 'highpass': pass = si >= cutoff; break;
+          case 'bandpass': pass = si >= cutoff-8 && si < cutoff+8; break;
+          case 'notch': pass = !(si >= cutoff-5 && si < cutoff+5); break;
+        }
+      }
+      if (!pass) continue;
+      for (let i = 0; i < samples.length; i++) {
+        const t = i / sr;
+        samples[i] += 0.08*(1/h)*Math.exp(-h*1.5*t)*Math.sin(2*Math.PI*f0*h*t);
+      }
+    }
+    return samples;
+  }
+
+  playUnfiltBtn.addEventListener('click', () => playBuffer(makeFilteredSound(false), 44100));
+  playFiltBtn.addEventListener('click', () => playBuffer(makeFilteredSound(true), 44100));
+})();
+
+// ── Complex CWT (needed for cross-synthesis & proper time-stretch) ─
+function computeCWTComplex(signal, scales, omega0) {
+  const N = signal.length;
+  const result = [];
+  for (let si = 0; si < scales.length; si++) {
+    const a = scales[si];
+    const re = new Float32Array(N);
+    const im = new Float32Array(N);
+    const hw = Math.min(Math.floor(a * 6), Math.floor(N / 2));
+    const norm = 1 / Math.sqrt(a);
+    for (let b = 0; b < N; b++) {
+      let r = 0, im_ = 0;
+      for (let k = -hw; k <= hw; k++) {
+        const idx = b + k;
+        if (idx < 0 || idx >= N) continue;
+        const t = k / a;
+        const env = Math.pow(Math.PI, -0.25) * Math.exp(-t * t / 2);
+        const s = signal[idx];
+        r   += s * env * Math.cos(omega0 * t);
+        im_ += s * env * Math.sin(omega0 * t);
+      }
+      re[b] = r * norm;
+      im[b] = im_ * norm;
+    }
+    result.push({ re, im });
+  }
+  return result;
+}
+
+// Reconstruct from complex CWT (analytic Morlet approximation)
+// x(t) ≈ K * Σ_si Re[W(si, t)] * Δa/a²
+function reconstructCWT(cwtComplex, scales) {
+  const N = cwtComplex[0].re.length;
+  const out = new Float32Array(N);
+  const da = scales.length > 1 ? scales[1] - scales[0] : 1;
+  for (let si = 0; si < scales.length; si++) {
+    const a = scales[si];
+    const w = 2 * da / (a * a); // factor 2 for analytic signal
+    for (let b = 0; b < N; b++) {
+      out[b] += cwtComplex[si].re[b] * w;
+    }
+  }
+  // Normalize
+  let mx = 0;
+  for (let i = 0; i < N; i++) if (Math.abs(out[i]) > mx) mx = Math.abs(out[i]);
+  if (mx > 0) for (let i = 0; i < N; i++) out[i] /= mx;
+  return out;
+}
+
+// Wavelet-domain time stretch (phase vocoder style)
+function waveletTimeStretchAudio(signal, factor, omega0) {
+  const N = signal.length;
+  const S = 48;
+  const scales = [];
+  for (let i = 0; i < S; i++) scales.push(2 + i * 1.5);
+
+  const cwt = computeCWTComplex(signal, scales, omega0);
+
+  const M = Math.floor(N * factor);
+  const strCwt = [];
+  for (let si = 0; si < S; si++) {
+    const re = new Float32Array(M);
+    const im = new Float32Array(M);
+    let phase = Math.atan2(cwt[si].im[0], cwt[si].re[0]);
+    for (let b_ = 0; b_ < M; b_++) {
+      const b = b_ / factor;
+      const b0 = Math.min(Math.floor(b), N - 1);
+      const b1 = Math.min(b0 + 1, N - 1);
+      const frac = b - b0;
+
+      const mag0 = Math.sqrt(cwt[si].re[b0] ** 2 + cwt[si].im[b0] ** 2);
+      const mag1 = Math.sqrt(cwt[si].re[b1] ** 2 + cwt[si].im[b1] ** 2);
+      const mag = mag0 + frac * (mag1 - mag0);
+
+      if (b0 < N - 1) {
+        const phi0 = Math.atan2(cwt[si].im[b0], cwt[si].re[b0]);
+        const phi1 = Math.atan2(cwt[si].im[b1], cwt[si].re[b1]);
+        let dPhi = phi1 - phi0;
+        while (dPhi > Math.PI) dPhi -= 2 * Math.PI;
+        while (dPhi < -Math.PI) dPhi += 2 * Math.PI;
+        phase += dPhi / factor;
+      }
+      re[b_] = mag * Math.cos(phase);
+      im[b_] = mag * Math.sin(phase);
+    }
+    strCwt.push({ re, im });
+  }
+
+  const strScales = scales; // same scale set, stretched in time
+  return reconstructCWT(strCwt, strScales);
+}
+
+// ── CHAPTER 2: Wavelet Probe ───────────────────────────────────
+(function waveletProbe() {
+  const canvas = document.getElementById('waveletProbe');
+  if (!canvas) return;
+  const scaleSlider = document.getElementById('probeScale');
+  const scaleVal = document.getElementById('probeScaleVal');
+
+  const N = 256;
+  const numScales = 40;
+  const omega0 = 5;
+  const sig = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    const t = i / N;
+    for (let h = 1; h <= 6; h++)
+      sig[i] += (1/h) * Math.exp(-h*3*t) * Math.sin(2*Math.PI*8*h*t);
+  }
+  const scales = [];
+  for (let i = 0; i < numScales; i++) scales.push(2 + i * 1.5);
+  const cwt = computeCWT(sig, scales, omega0, N);
+  let maxC = 0;
+  cwt.forEach(r => r.forEach(v => { if (v > maxC) maxC = v; }));
+
+  let probeX = Math.floor(N / 2);
+  let probeSi = 15;
+  let dragging = false;
+  let dragStartY = 0;
+  let dragStartSi = 15;
+
+  function draw() {
+    const W = canvas.parentElement.getBoundingClientRect().width;
+    const H = 280;
+    const ctx = fitCanvas(canvas);
+
+    probeSi = parseInt(scaleSlider.value);
+    scaleVal.textContent = `scale ${probeSi} (a=${scales[probeSi].toFixed(1)})`;
+
+    const waveH = 110;
+    const plotY = waveH + 4;
+    const plotH = H - plotY;
+    const cellW = W / N;
+    const cellH = plotH / numScales;
+
+    ctx.fillStyle = '#0a0b0f';
+    ctx.fillRect(0, 0, W, H);
+
+    // Scalogram background
+    for (let si = 0; si < numScales; si++) {
+      for (let b = 0; b < N; b++) {
+        const v = cwt[si][b] / (maxC || 1);
+        ctx.fillStyle = magmaColor(Math.pow(v, 0.6));
+        ctx.fillRect(b * cellW, plotY + si * cellH, cellW + 1, cellH + 1);
+      }
+    }
+
+    // Highlight active cell
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.fillRect(probeX * cellW - cellW, plotY + probeSi * cellH, cellW * 3, cellH);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(probeX * cellW, plotY + probeSi * cellH, cellW, cellH);
+
+    // Waveform
+    let maxS = 0;
+    sig.forEach(v => { if (Math.abs(v) > maxS) maxS = v; });
+    ctx.strokeStyle = '#4a9de8';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const x = (i / N) * W;
+      const y = waveH / 2 + (sig[i] / (maxS || 1)) * waveH * 0.38;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Overlay wavelet at probe position
+    const a = scales[probeSi];
+    const hw = Math.min(Math.floor(a * 5), 80);
+    ctx.strokeStyle = '#e8a44a';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    let first = true;
+    for (let k = -hw; k <= hw; k++) {
+      const i = probeX + k;
+      const t = k / a;
+      const v = morlet(t, omega0) / Math.sqrt(a);
+      const x = (i / N) * W;
+      const y = waveH / 2 - v * waveH * 1.5;
+      if (x < 0 || x > W) continue;
+      if (first) { ctx.moveTo(x, y); first = false; } else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Correlation readout
+    const coeff = cwt[probeSi][probeX];
+    ctx.fillStyle = '#e8a44a';
+    ctx.font = '11px monospace';
+    ctx.fillText(`W(a=${scales[probeSi].toFixed(1)}, b=${probeX}) = ${(coeff/(maxC||1)).toFixed(3)}`, 8, H - 6);
+  }
+
+  draw();
+  scaleSlider.addEventListener('input', draw);
+  window.addEventListener('resize', draw);
+
+  function getProbeX(e) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    return Math.max(0, Math.min(N - 1, Math.round((clientX - rect.left) / rect.width * N)));
+  }
+
+  canvas.addEventListener('mousedown', e => {
+    dragging = true;
+    dragStartY = e.clientY;
+    dragStartSi = probeSi;
+    probeX = getProbeX(e);
+    draw();
+  });
+  canvas.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    probeX = getProbeX(e);
+    const dy = e.clientY - dragStartY;
+    const W = canvas.parentElement.getBoundingClientRect().width;
+    const H = 280;
+    const plotH = H - 114;
+    const cellH = plotH / numScales;
+    probeSi = Math.max(0, Math.min(numScales - 1, Math.round(dragStartSi + dy / cellH)));
+    scaleSlider.value = probeSi;
+    draw();
+  });
+  canvas.addEventListener('mouseup', () => { dragging = false; });
+  canvas.addEventListener('mouseleave', () => { dragging = false; });
+  canvas.addEventListener('touchstart', e => {
+    dragging = true;
+    dragStartY = e.touches[0].clientY;
+    dragStartSi = probeSi;
+    probeX = getProbeX(e);
+    draw();
+  }, { passive: true });
+  canvas.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    probeX = getProbeX(e);
+    const dy = e.touches[0].clientY - dragStartY;
+    const plotH = 280 - 114;
+    const cellH = plotH / numScales;
+    probeSi = Math.max(0, Math.min(numScales - 1, Math.round(dragStartSi + dy / cellH)));
+    scaleSlider.value = probeSi;
+    draw();
+  }, { passive: true });
+  canvas.addEventListener('touchend', () => { dragging = false; });
+})();
+
+// ── CHAPTER 2: Heisenberg Boxes ────────────────────────────────
+(function heisenbergViz() {
+  const canvas = document.getElementById('heisenbergBoxes');
+  if (!canvas) return;
+  const animCheck = document.getElementById('heisbergAnimate');
+  const toggleBtn = document.getElementById('heisenbergToggle');
+
+  let showCWT = false;
+  let animT = 0;
+  let raf = null;
+
+  toggleBtn.addEventListener('click', () => { showCWT = !showCWT; draw(); });
+
+  function draw() {
+    const W = canvas.parentElement.getBoundingClientRect().width;
+    const H = 280;
+    const ctx = fitCanvas(canvas);
+
+    ctx.fillStyle = '#0a0b0f';
+    ctx.fillRect(0, 0, W, H);
+
+    const padL = 50, padB = 30, padT = 15, padR = 10;
+    const pw = W - padL - padR;
+    const ph = H - padT - padB;
+
+    // Axes
+    ctx.strokeStyle = '#2a2d3a';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + ph);
+    ctx.lineTo(padL + pw, padT + ph);
+    ctx.stroke();
+
+    ctx.fillStyle = '#8a8d9a';
+    ctx.font = '10px monospace';
+    ctx.fillText('Time →', padL + pw - 40, padT + ph + 20);
+    ctx.save(); ctx.translate(12, padT + ph/2); ctx.rotate(-Math.PI/2);
+    ctx.fillText('Frequency →', -40, 0);
+    ctx.restore();
+
+    const numFreqs = 6;
+    const numTimes = 8;
+
+    if (!showCWT) {
+      // STFT: fixed rectangular boxes
+      const bw = pw / numTimes;
+      const bh = ph / numFreqs;
+      for (let f = 0; f < numFreqs; f++) {
+        for (let t = 0; t < numTimes; t++) {
+          const x = padL + t * bw + 2;
+          const y = padT + (numFreqs - 1 - f) * bh + 2;
+          const alpha = 0.3 + 0.15 * Math.sin(animT + f * 0.5 + t * 0.3);
+          ctx.fillStyle = `rgba(74,157,232,${alpha})`;
+          ctx.fillRect(x, y, bw - 4, bh - 4);
+          ctx.strokeStyle = 'rgba(74,157,232,0.6)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x, y, bw - 4, bh - 4);
+        }
+      }
+      ctx.fillStyle = '#4a9de8';
+      ctx.font = '11px monospace';
+      ctx.fillText('STFT — fixed resolution at all frequencies', padL + 5, padT + 12);
+    } else {
+      // CWT: boxes that scale with frequency (wider at low freq, narrower at high)
+      for (let f = 0; f < numFreqs; f++) {
+        const freqFrac = (f + 0.5) / numFreqs;
+        const boxH = (ph / numFreqs) * 0.85;
+        const logScale = 1 / (freqFrac * 2 + 0.3);
+        const boxW = Math.min(pw * 0.25 * logScale, pw / numTimes * 2.5);
+        const centerFreqY = padT + (numFreqs - 1 - f) * (ph / numFreqs) + (ph / numFreqs) / 2;
+        const numT = Math.max(2, Math.floor(pw / boxW));
+        for (let t = 0; t < numT; t++) {
+          const cx = padL + (t + 0.5) * (pw / numT);
+          const x = cx - boxW / 2 + 1;
+          const y = centerFreqY - boxH / 2 + 1;
+          const alpha = 0.25 + 0.15 * Math.sin(animT + f * 0.7 + t * 0.4);
+          const hue = 30 + f * 20;
+          ctx.fillStyle = `hsla(${hue},70%,55%,${alpha})`;
+          ctx.fillRect(x, y, boxW - 2, boxH - 2);
+          ctx.strokeStyle = `hsla(${hue},70%,65%,0.7)`;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x, y, boxW - 2, boxH - 2);
+        }
+      }
+      ctx.fillStyle = '#e8a44a';
+      ctx.font = '11px monospace';
+      ctx.fillText('CWT — wide boxes (good freq res) at low freq, narrow (good time res) at high', padL + 5, padT + 12);
+    }
+
+    animT += 0.025;
+    if (animCheck.checked) raf = requestAnimationFrame(draw);
+  }
+
+  function start() {
+    if (raf) cancelAnimationFrame(raf);
+    draw();
+  }
+  animCheck.addEventListener('change', () => {
+    if (animCheck.checked) start();
+  });
+  start();
+  window.addEventListener('resize', start);
+})();
+
+// ── CHAPTER 2: Admissibility Explorer ─────────────────────────
+(function admissibilityExp() {
+  const canvas = document.getElementById('admissibility');
+  if (!canvas) return;
+  const omegaSlider = document.getElementById('admOmega');
+  const bwSlider = document.getElementById('admBw');
+  const dcSlider = document.getElementById('admDC');
+  const omegaVal = document.getElementById('admOmegaVal');
+  const bwVal = document.getElementById('admBwVal');
+  const dcVal = document.getElementById('admDCVal');
+  const result = document.getElementById('admResult');
+
+  function draw() {
+    const W = canvas.parentElement.getBoundingClientRect().width;
+    const H = 260;
+    const ctx = fitCanvas(canvas);
+
+    const omega0 = parseFloat(omegaSlider.value);
+    const bw = parseFloat(bwSlider.value);
+    const dc = parseFloat(dcSlider.value);
+    omegaVal.textContent = omega0.toFixed(1);
+    bwVal.textContent = bw.toFixed(1);
+    dcVal.textContent = dc.toFixed(2);
+
+    ctx.fillStyle = '#0a0b0f';
+    ctx.fillRect(0, 0, W, H);
+
+    const panW = (W - 20) / 3;
+
+    // Panel 1: Wavelet time domain
+    const N = 300;
+    const wvl = new Float32Array(N);
+    let mean = 0;
+    for (let i = 0; i < N; i++) {
+      const t = (i / N - 0.5) * 10;
+      wvl[i] = Math.exp(-t * t * bw * bw / 2) * Math.cos(omega0 * t) + dc;
+      mean += wvl[i];
+    }
+    mean /= N;
+    const zeroPassed = Math.abs(mean) < 0.05;
+
+    let maxW = 0;
+    wvl.forEach(v => { if (Math.abs(v) > maxW) maxW = Math.abs(v); });
+    ctx.strokeStyle = '#4a9de8';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const x = (i / N) * panW;
+      const y = H / 2 - (wvl[i] / (maxW || 1)) * H * 0.35;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    // Zero line
+    ctx.strokeStyle = '#2a2d3a';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, H/2); ctx.lineTo(panW, H/2);
+    ctx.stroke();
+
+    // Panel 2: Fourier magnitude
+    const F = 150;
+    const freqMag = new Float32Array(F);
+    let maxF = 0;
+    for (let k = 0; k < F; k++) {
+      let re = 0, im = 0;
+      const omega = k * 0.12;
+      for (let i = 0; i < N; i++) {
+        const t = (i / N - 0.5) * 10;
+        re += wvl[i] * Math.cos(omega * t) * (10 / N);
+        im += wvl[i] * Math.sin(omega * t) * (10 / N);
+      }
+      freqMag[k] = Math.sqrt(re * re + im * im);
+      if (freqMag[k] > maxF) maxF = freqMag[k];
+    }
+    const x2 = panW + 10;
+    ctx.strokeStyle = '#5ce89a';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let k = 0; k < F; k++) {
+      const x = x2 + (k / F) * panW;
+      const y = H - 10 - (freqMag[k] / (maxF || 1)) * (H - 20) * 0.85;
+      if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Panel 3: admissibility integrand |Ψ(ω)|²/ω
+    const x3 = 2 * panW + 20;
+    const adm = new Float32Array(F);
+    let Cpsi = 0;
+    let finite = true;
+    for (let k = 1; k < F; k++) {
+      const omega = k * 0.12;
+      adm[k] = (freqMag[k] * freqMag[k]) / omega;
+      Cpsi += adm[k] * 0.12;
+      if (adm[k] > 200) finite = false;
+    }
+    // Check: |Ψ(0)| — must be zero (zero mean)
+    if (freqMag[0] > 0.05 * maxF) finite = false;
+
+    let maxA = 0;
+    adm.forEach(v => { if (v > maxA && isFinite(v)) maxA = v; });
+    const admissible = finite && zeroPassed;
+    ctx.strokeStyle = admissible ? '#5ce89a' : '#e85a7a';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    let started = false;
+    for (let k = 1; k < F; k++) {
+      const x = x3 + (k / F) * panW;
+      const y = H - 10 - Math.min(1, adm[k] / (maxA || 1)) * (H - 20) * 0.85;
+      if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#8a8d9a';
+    ctx.font = '10px monospace';
+    ctx.fillText('ψ(t)', 4, 12);
+    ctx.fillText('|Ψ(ω)|', x2 + 4, 12);
+    ctx.fillText('|Ψ(ω)|²/ω', x3 + 4, 12);
+
+    result.textContent = admissible
+      ? '✓ ADMISSIBLE — C_ψ finite, zero mean'
+      : '✗ NOT ADMISSIBLE — ' + (freqMag[0] > 0.05 * maxF ? 'non-zero DC component' : 'integrand diverges');
+    result.style.color = admissible ? '#5ce89a' : '#e85a7a';
+  }
+
+  draw();
+  [omegaSlider, bwSlider, dcSlider].forEach(s => s.addEventListener('input', draw));
+  window.addEventListener('resize', draw);
+})();
+
+// ── CHAPTER 3: Wavelet Family Comparison ───────────────────────
+(function waveletFamily() {
+  const canvas = document.getElementById('waveletFamily');
+  if (!canvas) return;
+  const tabs = document.querySelectorAll('#waveletFamilyTabs .wtab');
+  const caption = document.getElementById('waveletFamilyCaption');
+
+  const captions = {
+    morlet: 'Morlet: complex Gaussian-modulated sinusoid — analytic, constant-Q, the natural choice for audio',
+    mexhat: 'Mexican Hat (ψ″ of Gaussian): real, 2nd derivative of Gaussian, zero mean, good localisation — not analytic',
+    gabor: 'Gabor (real): windowed cosine — similar to Morlet real part, used in early time-frequency analysis by Gabor (1946)',
+    notelet: '"Notelet": windowed sinusoid with sharp onset — mimics a musical note attack, good transient localisation'
+  };
+
+  let activeType = 'morlet';
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      activeType = tab.dataset.wt;
+      caption.textContent = captions[activeType];
+      draw();
+    });
+  });
+
+  function waveletSample(type, t, omega0) {
+    switch (type) {
+      case 'morlet':
+        return Math.pow(Math.PI, -0.25) * Math.exp(-t * t / 2) * Math.cos(omega0 * t);
+      case 'mexhat': {
+        const g = Math.exp(-t * t / 2);
+        return (1 - t * t) * g * 2 / Math.sqrt(3); // Normalized
+      }
+      case 'gabor':
+        return Math.exp(-t * t / 2) * Math.cos(omega0 * t) * 0.8;
+      case 'notelet': {
+        const env = t > -1 ? Math.exp(-t * t / 1.5) * (t > -2 ? 1 : 0) : 0;
+        return env * Math.sin(omega0 * t);
+      }
+    }
+    return 0;
+  }
+
+  function draw() {
+    const W = canvas.parentElement.getBoundingClientRect().width;
+    const H = 240;
+    const ctx = fitCanvas(canvas);
+    const N = 512;
+    const omega0 = 5;
+
+    ctx.fillStyle = '#0a0b0f';
+    ctx.fillRect(0, 0, W, H);
+
+    // Time-domain (left 55%)
+    const tw = W * 0.55;
+    const samples = new Float32Array(N);
+    let maxV = 0;
+    for (let i = 0; i < N; i++) {
+      const t = (i / N - 0.5) * 12;
+      samples[i] = waveletSample(activeType, t, omega0);
+      if (Math.abs(samples[i]) > maxV) maxV = Math.abs(samples[i]);
+    }
+
+    // Envelope
+    ctx.strokeStyle = 'rgba(232,164,74,0.4)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const t = (i / N - 0.5) * 12;
+      const env = Math.exp(-t * t / 2);
+      const x = (i / N) * tw;
+      const y = H / 2 - env * (H * 0.38);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const t = (i / N - 0.5) * 12;
+      const env = Math.exp(-t * t / 2);
+      const x = (i / N) * tw;
+      const y = H / 2 + env * (H * 0.38);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.strokeStyle = '#4a9de8';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const x = (i / N) * tw;
+      const y = H / 2 - (samples[i] / (maxV || 1)) * H * 0.38;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Zero line
+    ctx.strokeStyle = '#2a2d3a';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, H/2); ctx.lineTo(tw, H/2);
+    ctx.stroke();
+
+    // Frequency domain (right 45%)
+    const fw = W * 0.43;
+    const fx0 = W * 0.57;
+    const F = 200;
+    const freqMag = new Float32Array(F);
+    let maxFM = 0;
+    for (let k = 0; k < F; k++) {
+      const omega = k * 0.14;
+      let re = 0, im = 0;
+      for (let i = 0; i < N; i++) {
+        const t = (i / N - 0.5) * 12;
+        re += samples[i] * Math.cos(omega * t) * (12 / N);
+        im += samples[i] * Math.sin(omega * t) * (12 / N);
+      }
+      freqMag[k] = Math.sqrt(re * re + im * im);
+      if (freqMag[k] > maxFM) maxFM = freqMag[k];
+    }
+
+    ctx.strokeStyle = '#5ce89a';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let k = 0; k < F; k++) {
+      const x = fx0 + (k / F) * fw;
+      const y = H - 15 - (freqMag[k] / (maxFM || 1)) * (H - 25) * 0.9;
+      if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Baseline freq
+    ctx.strokeStyle = '#2a2d3a';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(fx0, H - 15); ctx.lineTo(fx0 + fw, H - 15);
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#8a8d9a';
+    ctx.font = '10px monospace';
+    ctx.fillText('Time domain', 5, 12);
+    ctx.fillText('Frequency domain', fx0 + 4, 12);
+    ctx.fillText(activeType === 'morlet' ? 'ψ(t) = Gaussian × cos(ω₀t)' :
+                 activeType === 'mexhat' ? 'ψ(t) = (1−t²)exp(−t²/2)' :
+                 activeType === 'gabor'  ? 'ψ(t) = exp(−t²/2)cos(ω₀t)' :
+                 'ψ(t) = onset-weighted sinusoid', 5, H - 5);
+  }
+
+  draw();
+  window.addEventListener('resize', draw);
+})();
+
+// ── CHAPTER 7: Proper wavelet time-stretch (replace audio) ─────
+// (Overrides the existing playStretched listener by patching after DOM load)
+(function patchTimeStretchAudio() {
+  const playStretchedBtn = document.getElementById('playStretched');
+  const stretchSlider = document.getElementById('stretchFactor');
+  if (!playStretchedBtn || !stretchSlider) return;
+
+  // Clone to remove old listener
+  const newBtn = playStretchedBtn.cloneNode(true);
+  playStretchedBtn.parentNode.replaceChild(newBtn, playStretchedBtn);
+
+  function makeOrigSamples() {
+    const sr = 44100;
+    const dur = 1;
+    const samples = new Float32Array(sr * dur);
+    for (let i = 0; i < samples.length; i++) {
+      const t = i / sr;
+      for (let h = 1; h <= 6; h++)
+        samples[i] += 0.08*(1/h)*Math.exp(-h*3*t)*Math.sin(2*Math.PI*220*h*t)*(1-Math.exp(-t*100));
+    }
+    return samples;
+  }
+
+  newBtn.addEventListener('click', () => {
+    const factor = parseFloat(stretchSlider.value);
+    const orig = makeOrigSamples();
+    // Downsample to N=512 for CWT processing
+    const N = 512;
+    const ds = new Float32Array(N);
+    const step = orig.length / N;
+    for (let i = 0; i < N; i++) ds[i] = orig[Math.floor(i * step)];
+
+    const stretched = waveletTimeStretchAudio(ds, factor, 5);
+    // Upsample to audio rate
+    const M = Math.floor(orig.length * factor);
+    const out = new Float32Array(M);
+    const srcLen = stretched.length;
+    for (let i = 0; i < M; i++) {
+      const idx = (i / M) * srcLen;
+      const i0 = Math.floor(idx);
+      const frac = idx - i0;
+      const v0 = i0 < srcLen ? stretched[i0] : 0;
+      const v1 = i0+1 < srcLen ? stretched[i0+1] : 0;
+      out[i] = (v0 + frac*(v1-v0)) * 0.7;
+    }
+    playBuffer(out, 44100);
+  });
+})();
+
+// ── CHAPTER 7: Cross-synthesis ─────────────────────────────────
+(function crossSynthViz() {
+  const canvas = document.getElementById('crossSynth');
+  if (!canvas) return;
+  const selA = document.getElementById('crossSynthA');
+  const selB = document.getElementById('crossSynthB');
+  const blendSlider = document.getElementById('crossBlend');
+  const blendVal = document.getElementById('crossBlendVal');
+  const playABtn = document.getElementById('playCrossA');
+  const playBBtn = document.getElementById('playCrossB');
+  const playHybridBtn = document.getElementById('playCrossHybrid');
+
+  const N = 256;
+  const S = 32;
+  const omega0 = 5;
+  const scales = [];
+  for (let i = 0; i < S; i++) scales.push(2 + i * 1.8);
+
+  function makeSound(type, N, forAudio) {
+    const sig = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const t = i / N;
+      switch (type) {
+        case 'flute':
+          for (let h = 1; h <= 6; h++)
+            sig[i] += (1/h) * Math.pow(Math.min(t/0.12, 1), 2) * Math.exp(-h*0.5*t) * Math.sin(2*Math.PI*(forAudio?220:8)*h*t);
+          break;
+        case 'bell':
+          for (let h = 1; h <= 8; h++) {
+            const decay = h * (forAudio?4:3);
+            sig[i] += (1/h) * Math.exp(-decay*t) * (1-Math.exp(-t*80)) * Math.sin(2*Math.PI*(forAudio?330:9)*h*t + h*0.3);
+          }
+          break;
+        case 'voice':
+          // Voiced with formants
+          [1,2,3,5,7].forEach((h,j) => {
+            const amp = [1, 0.5, 0.8, 0.3, 0.2][j];
+            sig[i] += amp * Math.exp(-h*1.5*t) * Math.sin(2*Math.PI*(forAudio?180:6)*h*t);
+          });
+          break;
+      }
+    }
+    // Normalize
+    let mx = 0;
+    sig.forEach(v => { if (Math.abs(v) > mx) mx = Math.abs(v); });
+    if (mx > 0) for (let j = 0; j < N; j++) sig[j] /= mx;
+    return sig;
+  }
+
+  function getCWT(type) {
+    const sig = makeSound(type, N, false);
+    return computeCWTComplex(sig, scales, omega0);
+  }
+
+  function drawScalogram(ctx, cwtData, x0, y0, w, h, tint) {
+    let maxC = 0;
+    cwtData.forEach(r => { for (let b = 0; b < N; b++) { const v = Math.sqrt(r.re[b]**2+r.im[b]**2); if (v>maxC) maxC=v; } });
+    const cellW = w / N;
+    const cellH = h / S;
+    for (let si = 0; si < S; si++) {
+      for (let b = 0; b < N; b++) {
+        const mag = Math.sqrt(cwtData[si].re[b]**2 + cwtData[si].im[b]**2);
+        const v = mag / (maxC || 1);
+        ctx.fillStyle = tint ? `rgba(${tint[0]},${tint[1]},${tint[2]},${Math.pow(v,0.5)*0.9+0.05})` : magmaColor(Math.pow(v,0.5));
+        ctx.fillRect(x0 + b * cellW, y0 + si * cellH, cellW+1, cellH+1);
+      }
+    }
+  }
+
+  function draw() {
+    const W = canvas.parentElement.getBoundingClientRect().width;
+    const H = 300;
+    const ctx = fitCanvas(canvas);
+
+    ctx.fillStyle = '#0a0b0f';
+    ctx.fillRect(0, 0, W, H);
+
+    const blend = parseFloat(blendSlider.value);
+    blendVal.textContent = Math.round(blend*100) + '% A-mag';
+
+    const rowH = (H - 10) / 3;
+    const cwtA = getCWT(selA.value);
+    const cwtB = getCWT(selB.value);
+
+    // Row 1: Sound A magnitude
+    drawScalogram(ctx, cwtA, 0, 0, W, rowH - 2, [74, 157, 232]);
+    // Row 2: Hybrid
+    const hybridCwt = cwtA.map((row, si) => {
+      const re = new Float32Array(N);
+      const im = new Float32Array(N);
+      for (let b = 0; b < N; b++) {
+        const magA = Math.sqrt(row.re[b]**2 + row.im[b]**2);
+        const magB = Math.sqrt(cwtB[si].re[b]**2 + cwtB[si].im[b]**2);
+        const mag = magA * blend + magB * (1 - blend);
+        const phaseB = Math.atan2(cwtB[si].im[b], cwtB[si].re[b]);
+        re[b] = mag * Math.cos(phaseB);
+        im[b] = mag * Math.sin(phaseB);
+      }
+      return { re, im };
+    });
+    drawScalogram(ctx, hybridCwt, 0, rowH + 2, W, rowH - 2, [232, 164, 74]);
+    // Row 3: Sound B
+    drawScalogram(ctx, cwtB, 0, 2*rowH + 4, W, rowH - 2, [92, 232, 154]);
+
+    ctx.fillStyle = '#8a8d9a';
+    ctx.font = '10px monospace';
+    ctx.fillText(`Sound A: ${selA.value} (magnitude)`, 5, 11);
+    ctx.fillText(`Hybrid: |W_A|×${blend.toFixed(2)} + |W_B|×${(1-blend).toFixed(2)}, phase from B`, 5, rowH + 13);
+    ctx.fillText(`Sound B: ${selB.value} (phase source)`, 5, 2*rowH + 15);
+  }
+
+  draw();
+  selA.addEventListener('change', draw);
+  selB.addEventListener('change', draw);
+  blendSlider.addEventListener('input', draw);
+  window.addEventListener('resize', draw);
+
+  function playType(type) {
+    const sr = 44100;
+    const dur = 1.5;
+    const NaS = Math.floor(sr * dur);
+    const sig = makeSound(type, NaS, true);
+    const out = new Float32Array(NaS);
+    for (let i = 0; i < NaS; i++) out[i] = sig[i] * 0.6;
+    playBuffer(out, sr);
+  }
+
+  playABtn.addEventListener('click', () => playType(selA.value));
+  playBBtn.addEventListener('click', () => playType(selB.value));
+  playHybridBtn.addEventListener('click', () => {
+    const blend = parseFloat(blendSlider.value);
+    // Do CWT-domain cross-synthesis on short buffer
+    const Ns = 512;
+    const sigA = makeSound(selA.value, Ns, false);
+    const sigB = makeSound(selB.value, Ns, false);
+    const cA = computeCWTComplex(sigA, scales, omega0);
+    const cB = computeCWTComplex(sigB, scales, omega0);
+    const hybCwt = cA.map((row, si) => {
+      const re = new Float32Array(Ns);
+      const im = new Float32Array(Ns);
+      for (let b = 0; b < Ns; b++) {
+        const magA = Math.sqrt(row.re[b]**2 + row.im[b]**2);
+        const magB = Math.sqrt(cB[si].re[b]**2 + cB[si].im[b]**2);
+        const mag = magA * blend + magB * (1 - blend);
+        const phB = Math.atan2(cB[si].im[b], cB[si].re[b]);
+        re[b] = mag * Math.cos(phB);
+        im[b] = mag * Math.sin(phB);
+      }
+      return { re, im };
+    });
+    const rec = reconstructCWT(hybCwt, scales);
+    // Upsample to 44100
+    const sr = 44100;
+    const dur = 1.5;
+    const out = new Float32Array(Math.floor(sr * dur));
+    for (let i = 0; i < out.length; i++) {
+      const idx = (i / out.length) * Ns;
+      const i0 = Math.floor(idx);
+      const frac = idx - i0;
+      const v0 = i0 < Ns ? rec[i0] : 0;
+      const v1 = i0+1 < Ns ? rec[i0+1] : 0;
+      out[i] = (v0 + frac*(v1-v0)) * 0.6;
+    }
+    playBuffer(out, sr);
+  });
+})();
+
+// ── CHAPTER 4: Piano Roll overlay (patch scalogramBuild) ───────
+(function pianoRollPatch() {
+  const canvas = document.getElementById('scalogramBuilder');
+  const checkbox = document.getElementById('showPianoRoll');
+  if (!canvas || !checkbox) return;
+
+  // We listen for checkbox change and trigger a custom event to tell
+  // the scalogramBuild IIFE to redraw
+  // Instead, we draw the piano roll overlay directly on top after build
+  const pianoOverlay = function() {
+    if (!checkbox.checked) return;
+    const sigSelect = document.getElementById('scalogramSignal');
+    if (!sigSelect || sigSelect.value !== 'two_notes') return;
+
+    const W = canvas.parentElement.getBoundingClientRect().width;
+    const H = 400;
+    const ctx = canvas.getContext('2d');
+    ctx.save();
+    ctx.scale(DPR, DPR);
+
+    // Two notes: first note ~0-128 samples, second note ~128-256 samples
+    const N = 256;
+    const numScales = 40;
+    const waveH = 80;
+    const plotY = waveH + 5;
+    const plotH = H - plotY;
+
+    // Note 1: scale idx ~15 (lower note, freq=10 in signal domain), time 0-0.5
+    // Note 2: scale idx ~10 (higher note, freq=15), time 0.5-1
+    // Detected from signal parameters: note1 at normalised freq 10/N*scale, note2 at 15
+    const note1ScaleY = plotY + (numScales - 1 - 15) / numScales * plotH;
+    const note2ScaleY = plotY + (numScales - 1 - 9) / numScales * plotH;
+    const noteH = plotH / numScales * 3;
+
+    // Note 1 box (0 to W/2)
+    ctx.fillStyle = 'rgba(74,157,232,0.25)';
+    ctx.strokeStyle = 'rgba(74,157,232,0.8)';
+    ctx.lineWidth = 1.5;
+    ctx.fillRect(0, note1ScaleY - noteH/2, W/2, noteH);
+    ctx.strokeRect(0, note1ScaleY - noteH/2, W/2, noteH);
+    ctx.fillStyle = '#4a9de8';
+    ctx.font = '10px monospace';
+    ctx.fillText('Note A (330 Hz)', 4, note1ScaleY + 3);
+
+    // Note 2 box (W/2 to W)
+    ctx.fillStyle = 'rgba(92,232,154,0.25)';
+    ctx.strokeStyle = 'rgba(92,232,154,0.8)';
+    ctx.lineWidth = 1.5;
+    ctx.fillRect(W/2, note2ScaleY - noteH/2, W/2, noteH);
+    ctx.strokeRect(W/2, note2ScaleY - noteH/2, W/2, noteH);
+    ctx.fillStyle = '#5ce89a';
+    ctx.font = '10px monospace';
+    ctx.fillText('Note B (440 Hz)', W/2 + 4, note2ScaleY + 3);
+
+    // Vertical divider
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.setLineDash([4,4]);
+    ctx.beginPath();
+    ctx.moveTo(W/2, plotY);
+    ctx.lineTo(W/2, H);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.restore();
+  };
+
+  // Attach: re-draw overlay whenever build button clicked or checkbox toggled
+  const buildBtn = document.getElementById('buildScalogram');
+  if (buildBtn) {
+    const orig = buildBtn.onclick;
+    buildBtn.addEventListener('click', () => setTimeout(pianoOverlay, 1500));
+  }
+  checkbox.addEventListener('change', () => {
+    if (checkbox.checked) pianoOverlay();
+    else {
+      // Trigger a rebuild to clear
+      const sigSelect = document.getElementById('scalogramSignal');
+      if (sigSelect) sigSelect.dispatchEvent(new Event('change'));
+    }
+  });
+})();
+
+// ── CHAPTER 7b: Wavelet Denoising ──────────────────────────────
+(function denoising() {
+  const canvas = document.getElementById('denoising');
+  if (!canvas) return;
+  const sigSelect = document.getElementById('denoiseSignal');
+  const noiseLvl = document.getElementById('noiseLevel');
+  const threshSlider = document.getElementById('denoiseThresh');
+  const noiseLvlVal = document.getElementById('noiseLevelVal');
+  const threshVal = document.getElementById('denoiseThreshVal');
+  const playNoisyBtn = document.getElementById('playNoisy');
+  const playDenoisedBtn = document.getElementById('playDenoised');
+  const playCleanBtn = document.getElementById('playClean');
+
+  const N = 256;
+  const S = 40;
+  const omega0 = 5;
+  const scales = [];
+  for (let i = 0; i < S; i++) scales.push(1.5 + i * 1.4);
+
+  function makeCleanSig(type) {
+    const sig = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const t = i / N;
+      switch (type) {
+        case 'piano':
+          for (let h = 1; h <= 8; h++)
+            sig[i] += (1/h)*Math.exp(-h*3*t)*Math.sin(2*Math.PI*8*h*t);
+          break;
+        case 'vibrato':
+          sig[i] = Math.sin(2*Math.PI*(18+4*Math.sin(2*Math.PI*4*t))*t)*Math.exp(-t*1.5);
+          break;
+        case 'melody':
+          const notes = [8,10,12,10,8];
+          const ni = Math.floor(t * notes.length);
+          const nt = (t * notes.length) % 1;
+          sig[i] = Math.sin(2*Math.PI*notes[Math.min(ni,notes.length-1)]*t)*Math.exp(-nt*3)*(1-Math.exp(-nt*20));
+          break;
+      }
+    }
+    let mx = 0;
+    sig.forEach(v => { if (Math.abs(v) > mx) mx = Math.abs(v); });
+    if (mx > 0) for (let i = 0; i < N; i++) sig[i] /= mx;
+    return sig;
+  }
+
+  function addNoise(sig, level) {
+    const out = new Float32Array(N);
+    for (let i = 0; i < N; i++) out[i] = sig[i] + (Math.random()-0.5)*2*level;
+    return out;
+  }
+
+  function softThreshold(v, t) {
+    const s = Math.sign(v);
+    return s * Math.max(0, Math.abs(v) - t);
+  }
+
+  function denoise(noisySig, threshold) {
+    const cwt = computeCWTComplex(noisySig, scales, omega0);
+    // Apply soft threshold to each coefficient magnitude
+    const threshCwt = cwt.map(row => {
+      const re = new Float32Array(N);
+      const im = new Float32Array(N);
+      for (let b = 0; b < N; b++) {
+        const mag = Math.sqrt(row.re[b]**2 + row.im[b]**2);
+        const thMag = Math.max(0, mag - threshold);
+        const phase = mag > 0 ? Math.atan2(row.im[b], row.re[b]) : 0;
+        re[b] = thMag * Math.cos(phase);
+        im[b] = thMag * Math.sin(phase);
+      }
+      return { re, im };
+    });
+    return reconstructCWT(threshCwt, scales);
+  }
+
+  function draw() {
+    const W = canvas.parentElement.getBoundingClientRect().width;
+    const H = 320;
+    const ctx = fitCanvas(canvas);
+
+    const noiseLevel = parseFloat(noiseLvl.value);
+    const threshold = parseFloat(threshSlider.value);
+    noiseLvlVal.textContent = noiseLevel.toFixed(2);
+    threshVal.textContent = threshold.toFixed(2);
+
+    const clean = makeCleanSig(sigSelect.value);
+    const noisy = addNoise(clean, noiseLevel);
+    const den = denoise(noisy, threshold);
+
+    ctx.fillStyle = '#0a0b0f';
+    ctx.fillRect(0, 0, W, H);
+
+    const rowH = (H - 15) / 3;
+
+    function drawWave(sig, y0, color, label) {
+      let mx = 0;
+      sig.forEach(v => { if (Math.abs(v) > mx) mx = Math.abs(v); });
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let i = 0; i < N; i++) {
+        const x = (i / N) * W;
+        const y = y0 + rowH/2 + (sig[i]/(mx||1))*rowH*0.42;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.fillStyle = '#8a8d9a';
+      ctx.font = '10px monospace';
+      ctx.fillText(label, 5, y0 + 12);
+    }
+
+    drawWave(clean, 0, '#4a9de8', 'Clean original');
+    drawWave(noisy, rowH + 5, '#e85a7a', `Noisy (σ=${noiseLevel.toFixed(2)})`);
+    drawWave(den, 2*rowH + 10, '#5ce89a', `Denoised (λ=${threshold.toFixed(2)})`);
+
+    // SNR estimate
+    let sig2 = 0, err2 = 0;
+    for (let i = 0; i < N; i++) { sig2 += clean[i]**2; err2 += (den[i]-clean[i])**2; }
+    const snr = 10 * Math.log10(sig2 / (err2 || 1e-10));
+    ctx.fillStyle = '#5ce89a';
+    ctx.font = '11px monospace';
+    ctx.fillText(`SNR ≈ ${snr.toFixed(1)} dB`, W - 110, H - 5);
+  }
+
+  draw();
+  [sigSelect, noiseLvl, threshSlider].forEach(el => el.addEventListener('input', draw));
+  window.addEventListener('resize', draw);
+
+  function makeAudioSig(type, noisy_, threshold_, forAudio) {
+    const sr = 44100;
+    const dur = 2;
+    const Na = Math.floor(sr * dur);
+    const out = new Float32Array(Na);
+    const f0 = forAudio ? 220 : 8;
+    for (let i = 0; i < Na; i++) {
+      const t = i / sr;
+      const tn = t / dur;
+      switch (type) {
+        case 'piano':
+          for (let h = 1; h <= 8; h++)
+            out[i] += 0.06*(1/h)*Math.exp(-h*3*t)*Math.sin(2*Math.PI*f0*h*t);
+          break;
+        case 'vibrato':
+          out[i] = 0.3*Math.sin(2*Math.PI*(f0+10*Math.sin(2*Math.PI*4*t))*t)*Math.exp(-t);
+          break;
+        case 'melody': {
+          const notes = forAudio ? [220,275,330,275,220] : [8,10,12,10,8];
+          const ni = Math.floor(tn * notes.length);
+          const nt = (tn * notes.length) % 1;
+          out[i] = 0.3*Math.sin(2*Math.PI*notes[Math.min(ni,notes.length-1)]*t)*Math.exp(-nt*3)*(1-Math.exp(-nt*20));
+          break;
+        }
+      }
+    }
+    if (noisy_) {
+      const nl = parseFloat(noiseLvl.value) * 0.5;
+      for (let i = 0; i < Na; i++) out[i] += (Math.random()-0.5)*nl;
+    }
+    return out;
+  }
+
+  playCleanBtn.addEventListener('click', () => playBuffer(makeAudioSig(sigSelect.value, false, 0, true), 44100));
+  playNoisyBtn.addEventListener('click', () => playBuffer(makeAudioSig(sigSelect.value, true, 0, true), 44100));
+  playDenoisedBtn.addEventListener('click', () => {
+    const threshold = parseFloat(threshSlider.value);
+    const clean = makeCleanSig(sigSelect.value);
+    const noisy = addNoise(clean, parseFloat(noiseLvl.value));
+    const den = denoise(noisy, threshold);
+    // Upsample to audio rate
+    const sr = 44100; const dur = 2;
+    const Na = Math.floor(sr * dur);
+    const out = new Float32Array(Na);
+    for (let i = 0; i < Na; i++) {
+      const idx = (i / Na) * N;
+      const i0 = Math.floor(idx);
+      const frac = idx - i0;
+      const v0 = i0 < N ? den[i0] : 0;
+      const v1 = i0+1 < N ? den[i0+1] : 0;
+      out[i] = (v0 + frac*(v1-v0)) * 0.6;
+    }
+    playBuffer(out, sr);
+  });
+})();
+
+// ── TOC highlighting ───────────────────────────────────────────
+(function tocHighlight() {
+  const links = document.querySelectorAll('#toc a');
+  const sections = [];
+  links.forEach(a => {
+    const id = a.getAttribute('href').slice(1);
+    const el = document.getElementById(id);
+    if (el) sections.push({ el, link: a });
+  });
+
+  function update() {
+    const scrollY = window.scrollY + 100;
+    let current = sections[0];
+    for (const s of sections) {
+      if (s.el.offsetTop <= scrollY) current = s;
+    }
+    links.forEach(a => a.classList.remove('active'));
+    if (current) current.link.classList.add('active');
+  }
+  window.addEventListener('scroll', update, { passive: true });
+  update();
+})();
+
+})();
+</script>
+</body>
+</html>
