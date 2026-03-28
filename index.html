@@ -1328,7 +1328,7 @@ function synthVoice(f0, dur, sr) {
   // Mix and normalize
   let mx = 0;
   for (let i = 0; i < N; i++) if (Math.abs(filtered[i]) > mx) mx = Math.abs(filtered[i]);
-  if (mx > 0) for (let i = 0; i < N; i++) filtered[i] = filtered[i] / mx * 0.3;
+  if (mx > 0) for (let i = 0; i < N; i++) filtered[i] = filtered[i] / mx * 0.7;
   return filtered;
 }
 
@@ -3679,7 +3679,7 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     }
     let mx = 0;
     for (let i = 0; i < Na; i++) if (Math.abs(out[i]) > mx) mx = Math.abs(out[i]);
-    if (mx > 0) for (let i = 0; i < Na; i++) out[i] = out[i] / mx * 0.35;
+    if (mx > 0) for (let i = 0; i < Na; i++) out[i] = out[i] / mx * 0.8;
     return out;
   }
 
@@ -3793,7 +3793,7 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
       for (let i = 0; i < Na; i++) out[i] /= 1.5;
       let mx = 0;
       for (let i = 0; i < Na; i++) if (Math.abs(out[i]) > mx) mx = Math.abs(out[i]);
-      if (mx > 0) for (let i = 0; i < Na; i++) out[i] = out[i] / mx * 0.4;
+      if (mx > 0) for (let i = 0; i < Na; i++) out[i] = out[i] / mx * 0.9;
 
       playBuffer(out, crossSr);
     } catch(e) {
@@ -3901,7 +3901,7 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     // Normalize
     let mx = 0;
     for (let i = 0; i < wNa; i++) if (Math.abs(recon[i]) > mx) mx = Math.abs(recon[i]);
-    if (mx > 0) for (let i = 0; i < wNa; i++) recon[i] = recon[i] / mx * 0.4;
+    if (mx > 0) for (let i = 0; i < wNa; i++) recon[i] = recon[i] / mx * 0.9;
 
     playBuffer(recon, wSr);
   });
