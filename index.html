@@ -1178,6 +1178,7 @@ function getAudioCtx() {
 
 function playBuffer(samples, sr) {
   const ctx = getAudioCtx();
+  if (ctx.state === 'suspended') ctx.resume();
   const buf = ctx.createBuffer(1, samples.length, sr);
   buf.getChannelData(0).set(samples);
   const src = ctx.createBufferSource();
@@ -3730,19 +3731,13 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     }
   }
 
-  playABtn.addEventListener('click', () => playBuffer(makeAudioForType(selA.value), crossSr));
-  playBBtn.addEventListener('click', () => playBuffer(makeAudioForType(selB.value), crossSr));
+  playABtn.addEventListener('click', () => { const c=getAudioCtx(); if(c.state==='suspended') c.resume(); playBuffer(makeAudioForType(selA.value), crossSr); });
+  playBBtn.addEventListener('click', () => { const c=getAudioCtx(); if(c.state==='suspended') c.resume(); playBuffer(makeAudioForType(selB.value), crossSr); });
 
   // ── Proper STFT-based spectral cross-synthesis ──
   // |STFT(A)| × exp(i·phase(STFT(B))) → ISTFT
-  playHybridBtn.addEventListener('click', () => {
-    const blend = parseFloat(blendSlider.value);
-    const sr = crossSr;
-    const audA = makeAudioForType(selA.value);
-    const audB = makeAudioForType(selB.value);
+  function stftCrossSynth(audA, audB, blend) {
     const Na = Math.max(audA.length, audB.length);
-
-    // Pad both to same length
     const padA = new Float32Array(Na);
     const padB = new Float32Array(Na);
     padA.set(audA); padB.set(audB);
@@ -3759,51 +3754,58 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     for (let f = 0; f < numFrames; f++) {
       const offset = f * hop;
 
-      // FFT of A
       const reA = new Float32Array(fftSize);
       const imA = new Float32Array(fftSize);
-      for (let n = 0; n < fftSize; n++)
-        reA[n] = (offset+n < Na ? padA[offset+n] : 0) * win[n];
-      fft(reA, imA, false);
-
-      // FFT of B
       const reB = new Float32Array(fftSize);
       const imB = new Float32Array(fftSize);
-      for (let n = 0; n < fftSize; n++)
-        reB[n] = (offset+n < Na ? padB[offset+n] : 0) * win[n];
+      for (let n = 0; n < fftSize; n++) {
+        const idx = offset + n;
+        reA[n] = (idx < Na ? padA[idx] : 0) * win[n];
+        reB[n] = (idx < Na ? padB[idx] : 0) * win[n];
+      }
+      fft(reA, imA, false);
       fft(reB, imB, false);
 
       // Cross-synthesis: magnitude from A (blended), phase from B
-      const reH = new Float32Array(fftSize);
-      const imH = new Float32Array(fftSize);
       for (let k = 0; k < fftSize; k++) {
         const magA = Math.sqrt(reA[k]*reA[k] + imA[k]*imA[k]);
         const magB = Math.sqrt(reB[k]*reB[k] + imB[k]*imB[k]);
         const mag = magA * blend + magB * (1 - blend);
         const phB = Math.atan2(imB[k], reB[k]);
-        reH[k] = mag * Math.cos(phB);
-        imH[k] = mag * Math.sin(phB);
+        reA[k] = mag * Math.cos(phB);
+        imA[k] = mag * Math.sin(phB);
       }
 
-      // IFFT
-      fft(reH, imH, true);
+      fft(reA, imA, true); // IFFT in-place
 
-      // Overlap-add
       for (let n = 0; n < fftSize; n++) {
-        if (offset+n < Na) {
-          out[offset+n] += reH[n] * win[n];
-          winSum[offset+n] += win[n]*win[n];
+        const idx = offset + n;
+        if (idx < Na) {
+          out[idx] += reA[n] * win[n];
+          winSum[idx] += win[n]*win[n];
         }
       }
     }
     for (let i = 0; i < Na; i++) if (winSum[i] > 1e-8) out[i] /= winSum[i];
 
-    // Normalize output
     let mx = 0;
     for (let i = 0; i < Na; i++) if (Math.abs(out[i]) > mx) mx = Math.abs(out[i]);
     if (mx > 0) for (let i = 0; i < Na; i++) out[i] = out[i] / mx * 0.4;
+    return out;
+  }
 
-    playBuffer(out, sr);
+  playHybridBtn.addEventListener('click', () => {
+    try {
+      const blend = parseFloat(blendSlider.value);
+      const audA = makeAudioForType(selA.value);
+      const audB = makeAudioForType(selB.value);
+      const ctx = getAudioCtx();
+      if (ctx.state === 'suspended') ctx.resume();
+      const out = stftCrossSynth(audA, audB, blend);
+      playBuffer(out, crossSr);
+    } catch(e) {
+      console.error('STFT cross-synthesis error:', e);
+    }
   });
 
   // ── Wavelet (CWT) cross-synthesis — as Kronland-Martinet described ──
