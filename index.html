@@ -1259,15 +1259,21 @@ function synthBell(f0, dur, sr) {
 function synthFlute(f0, dur, sr) {
   const N = Math.floor(dur * sr);
   const out = new Float32Array(N);
+  // Vibrato: 5.2 Hz rate, 2.5 Hz depth, fades in after 0.3s
+  // Use phase accumulation per harmonic to avoid f(t)*t bug
+  const vRate = 5.2, vDepth = 2.5;
   for (let h = 1; h <= 6; h++) {
     const amp = h === 1 ? 1 : (h === 2 ? 0.4 : Math.pow(h, -2.5));
+    let phase = 0;
     for (let i = 0; i < N; i++) {
       const t = i / sr;
-      // Slow attack (~80ms), gentle vibrato after 0.3s
       const attack = Math.min(1, t / 0.08);
-      const vib = t > 0.3 ? 3 * Math.sin(2 * Math.PI * 5.2 * t) : 0;
+      // Vibrato fades in smoothly after 0.3s
+      const vibAmt = t > 0.3 ? Math.min(1, (t - 0.3) / 0.2) : 0;
+      const fInst = f0 * h + vibAmt * vDepth * Math.sin(2 * Math.PI * vRate * t);
+      phase += 2 * Math.PI * fInst / sr;
       const env = attack * attack * Math.exp(-0.5 * t) * (0.7 + 0.3 * Math.exp(-2 * t));
-      out[i] += 0.08 * amp * env * Math.sin(2 * Math.PI * (f0 + vib) * h * t);
+      out[i] += 0.08 * amp * env * Math.sin(phase);
     }
   }
   // Breath noise
