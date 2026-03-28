@@ -1124,6 +1124,44 @@ function magmaColor(v) {
   return `rgb(${r},${g},${b})`;
 }
 
+// Radix-2 FFT (in-place, complex arrays)
+function fft(reArr, imArr, inverse) {
+  const n = reArr.length;
+  // Bit-reversal permutation
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) {
+      let tmp = reArr[i]; reArr[i] = reArr[j]; reArr[j] = tmp;
+      tmp = imArr[i]; imArr[i] = imArr[j]; imArr[j] = tmp;
+    }
+  }
+  // Cooley-Tukey butterflies
+  for (let len = 2; len <= n; len <<= 1) {
+    const angle = (inverse ? 2 : -2) * Math.PI / len;
+    const wRe = Math.cos(angle), wIm = Math.sin(angle);
+    for (let i = 0; i < n; i += len) {
+      let curRe = 1, curIm = 0;
+      for (let j = 0; j < len / 2; j++) {
+        const uRe = reArr[i + j], uIm = imArr[i + j];
+        const vRe = reArr[i + j + len/2] * curRe - imArr[i + j + len/2] * curIm;
+        const vIm = reArr[i + j + len/2] * curIm + imArr[i + j + len/2] * curRe;
+        reArr[i + j] = uRe + vRe;
+        imArr[i + j] = uIm + vIm;
+        reArr[i + j + len/2] = uRe - vRe;
+        imArr[i + j + len/2] = uIm - vIm;
+        const newCurRe = curRe * wRe - curIm * wIm;
+        curIm = curRe * wIm + curIm * wRe;
+        curRe = newCurRe;
+      }
+    }
+  }
+  if (inverse) {
+    for (let i = 0; i < n; i++) { reArr[i] /= n; imArr[i] /= n; }
+  }
+}
+
 // Web Audio
 let audioCtx = null;
 function getAudioCtx() {
@@ -3481,22 +3519,37 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
 
   function makeCleanSig(type) {
     const sig = new Float32Array(N);
-    for (let i = 0; i < N; i++) {
-      const t = i / N;
-      switch (type) {
-        case 'piano':
+    switch (type) {
+      case 'piano':
+        for (let i = 0; i < N; i++) {
+          const t = i / N;
           for (let h = 1; h <= 8; h++)
             sig[i] += (1/h)*Math.exp(-h*3*t)*Math.sin(2*Math.PI*8*h*t);
-          break;
-        case 'vibrato':
-          sig[i] = Math.sin(2*Math.PI*(18+4*Math.sin(2*Math.PI*4*t))*t)*Math.exp(-t*1.5);
-          break;
-        case 'melody':
-          const notes = [8,10,12,10,8];
-          const ni = Math.floor(t * notes.length);
-          const nt = (t * notes.length) % 1;
-          sig[i] = Math.sin(2*Math.PI*notes[Math.min(ni,notes.length-1)]*t)*Math.exp(-nt*3)*(1-Math.exp(-nt*20));
-          break;
+        }
+        break;
+      case 'vibrato': {
+        // Correct phase accumulation for vibrato
+        const f0 = 18, vDepth = 4, vRate = 4;
+        for (let i = 0; i < N; i++) {
+          const t = i / N;
+          const phase = 2*Math.PI*f0*t - (vDepth/vRate)*Math.cos(2*Math.PI*vRate*t);
+          sig[i] = Math.sin(phase) * Math.exp(-t*1.5);
+        }
+        break;
+      }
+      case 'melody': {
+        // Phase-continuous note sequence
+        const freqs = [8,10,12,10,8];
+        let phase = 0;
+        for (let i = 0; i < N; i++) {
+          const t = i / N;
+          const ni = Math.min(Math.floor(t * freqs.length), freqs.length - 1);
+          const nt = (t * freqs.length) % 1;
+          const env = Math.exp(-nt*3) * (1 - Math.exp(-nt*20));
+          phase += 2 * Math.PI * freqs[ni] / N;
+          sig[i] = Math.sin(phase) * env;
+        }
+        break;
       }
     }
     let mx = 0;
@@ -3505,33 +3558,85 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     return sig;
   }
 
-  function addNoise(sig, level) {
-    const out = new Float32Array(N);
-    for (let i = 0; i < N; i++) out[i] = sig[i] + (Math.random()-0.5)*2*level;
+  // Reconstruct from CWT without normalizing (preserves amplitude relationships)
+  function reconstructRaw(cwtComplex) {
+    const len = cwtComplex[0].re.length;
+    const out = new Float32Array(len);
+    const da = scales.length > 1 ? scales[1] - scales[0] : 1;
+    for (let si = 0; si < scales.length; si++) {
+      const a = scales[si];
+      const w = 2 * da / (a * a);
+      for (let b = 0; b < len; b++) {
+        out[b] += cwtComplex[si].re[b] * w;
+      }
+    }
     return out;
   }
 
-  function softThreshold(v, t) {
-    const s = Math.sign(v);
-    return s * Math.max(0, Math.abs(v) - t);
+  // Cache noisy signal so it doesn't change when threshold slider moves
+  let cachedClean = null, cachedNoisy = null;
+  let cachedType = '', cachedNoiseLvl = -1;
+  // Also cache the CWT of the noisy signal and the roundtrip scaling factor
+  let cachedCwt = null, cachedScale = 1;
+
+  function updateCache() {
+    const type = sigSelect.value;
+    const nl = parseFloat(noiseLvl.value);
+    if (type === cachedType && nl === cachedNoiseLvl) return;
+    cachedType = type;
+    cachedNoiseLvl = nl;
+    cachedClean = makeCleanSig(type);
+
+    // Generate noise once and cache it
+    cachedNoisy = new Float32Array(N);
+    for (let i = 0; i < N; i++) cachedNoisy[i] = cachedClean[i] + (Math.random()-0.5)*2*nl;
+
+    // Compute CWT of noisy signal once
+    cachedCwt = computeCWTComplex(cachedNoisy, scales, omega0);
+
+    // Compute roundtrip scale factor: noisy -> CWT -> reconstruct (no thresholding)
+    const roundtrip = reconstructRaw(cachedCwt);
+    let mxNoisy = 0, mxRound = 0;
+    for (let i = 0; i < N; i++) {
+      if (Math.abs(cachedNoisy[i]) > mxNoisy) mxNoisy = Math.abs(cachedNoisy[i]);
+      if (Math.abs(roundtrip[i]) > mxRound) mxRound = Math.abs(roundtrip[i]);
+    }
+    cachedScale = mxRound > 0 ? mxNoisy / mxRound : 1;
   }
 
-  function denoise(noisySig, threshold) {
-    const cwt = computeCWTComplex(noisySig, scales, omega0);
-    // Apply soft threshold to each coefficient magnitude
-    const threshCwt = cwt.map(row => {
+  function denoise(threshFrac) {
+    // threshFrac is 0..1 as fraction of max coefficient magnitude
+    // Find max coefficient magnitude
+    let maxMag = 0;
+    for (let si = 0; si < S; si++) {
+      for (let b = 0; b < N; b++) {
+        const mag = Math.sqrt(cachedCwt[si].re[b]**2 + cachedCwt[si].im[b]**2);
+        if (mag > maxMag) maxMag = mag;
+      }
+    }
+    const absThresh = threshFrac * maxMag;
+
+    // Apply soft threshold
+    const threshCwt = cachedCwt.map(row => {
       const re = new Float32Array(N);
       const im = new Float32Array(N);
       for (let b = 0; b < N; b++) {
         const mag = Math.sqrt(row.re[b]**2 + row.im[b]**2);
-        const thMag = Math.max(0, mag - threshold);
-        const phase = mag > 0 ? Math.atan2(row.im[b], row.re[b]) : 0;
-        re[b] = thMag * Math.cos(phase);
-        im[b] = thMag * Math.sin(phase);
+        const thMag = Math.max(0, mag - absThresh);
+        if (thMag > 0 && mag > 0) {
+          const ratio = thMag / mag;
+          re[b] = row.re[b] * ratio;
+          im[b] = row.im[b] * ratio;
+        }
       }
       return { re, im };
     });
-    return reconstructCWT(threshCwt, scales);
+
+    // Reconstruct and apply same scaling as roundtrip
+    const raw = reconstructRaw(threshCwt);
+    const out = new Float32Array(N);
+    for (let i = 0; i < N; i++) out[i] = raw[i] * cachedScale;
+    return out;
   }
 
   function draw() {
@@ -3544,24 +3649,27 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     noiseLvlVal.textContent = noiseLevel.toFixed(2);
     threshVal.textContent = threshold.toFixed(2);
 
-    const clean = makeCleanSig(sigSelect.value);
-    const noisy = addNoise(clean, noiseLevel);
-    const den = denoise(noisy, threshold);
+    updateCache();
+    const den = denoise(threshold);
 
     ctx.fillStyle = '#0a0b0f';
     ctx.fillRect(0, 0, W, H);
 
     const rowH = (H - 15) / 3;
 
+    // Use a common scale for all three waveforms so amplitudes are comparable
+    let globalMax = 0;
+    cachedClean.forEach(v => { if (Math.abs(v) > globalMax) globalMax = Math.abs(v); });
+    cachedNoisy.forEach(v => { if (Math.abs(v) > globalMax) globalMax = Math.abs(v); });
+    den.forEach(v => { if (Math.abs(v) > globalMax) globalMax = Math.abs(v); });
+
     function drawWave(sig, y0, color, label) {
-      let mx = 0;
-      sig.forEach(v => { if (Math.abs(v) > mx) mx = Math.abs(v); });
       ctx.strokeStyle = color;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       for (let i = 0; i < N; i++) {
         const x = (i / N) * W;
-        const y = y0 + rowH/2 + (sig[i]/(mx||1))*rowH*0.42;
+        const y = y0 + rowH/2 + (sig[i]/(globalMax||1))*rowH*0.42;
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
       ctx.stroke();
@@ -3570,13 +3678,24 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
       ctx.fillText(label, 5, y0 + 12);
     }
 
-    drawWave(clean, 0, '#4a9de8', 'Clean original');
-    drawWave(noisy, rowH + 5, '#e85a7a', `Noisy (σ=${noiseLevel.toFixed(2)})`);
+    drawWave(cachedClean, 0, '#4a9de8', 'Clean original');
+    drawWave(cachedNoisy, rowH + 5, '#e85a7a', `Noisy (level=${noiseLevel.toFixed(2)})`);
     drawWave(den, 2*rowH + 10, '#5ce89a', `Denoised (λ=${threshold.toFixed(2)})`);
+
+    // Also draw clean signal ghosted behind denoised for comparison
+    ctx.strokeStyle = 'rgba(74,157,232,0.25)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const x = (i / N) * W;
+      const y = 2*rowH + 10 + rowH/2 + (cachedClean[i]/(globalMax||1))*rowH*0.42;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
 
     // SNR estimate
     let sig2 = 0, err2 = 0;
-    for (let i = 0; i < N; i++) { sig2 += clean[i]**2; err2 += (den[i]-clean[i])**2; }
+    for (let i = 0; i < N; i++) { sig2 += cachedClean[i]**2; err2 += (den[i]-cachedClean[i])**2; }
     const snr = 10 * Math.log10(sig2 / (err2 || 1e-10));
     ctx.fillStyle = '#5ce89a';
     ctx.font = '11px monospace';
@@ -3584,85 +3703,128 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   }
 
   draw();
-  [noiseLvl, threshSlider].forEach(el => el.addEventListener('input', draw));
-  sigSelect.addEventListener('change', draw);
-  sigSelect.addEventListener('input', draw);
+  threshSlider.addEventListener('input', draw);
+  noiseLvl.addEventListener('input', () => { cachedNoiseLvl = -1; draw(); });
+  sigSelect.addEventListener('change', () => { cachedType = ''; draw(); });
+  sigSelect.addEventListener('input', () => { cachedType = ''; draw(); });
   window.addEventListener('resize', draw);
 
-  function makeAudioSig(type, noisy_, threshold_, forAudio) {
-    const sr = 44100;
-    const dur = 2;
-    const Na = Math.floor(sr * dur);
+  // ── Audio playback ──
+  function makeAudioClean(type) {
+    const sr = 44100, dur = 2;
+    const Na = sr * dur;
     const out = new Float32Array(Na);
-    const f0 = forAudio ? 220 : 8;
-    for (let i = 0; i < Na; i++) {
-      const t = i / sr;
-      const tn = t / dur;
-      switch (type) {
-        case 'piano':
+    switch (type) {
+      case 'piano':
+        for (let i = 0; i < Na; i++) {
+          const t = i / sr;
           for (let h = 1; h <= 8; h++)
-            out[i] += 0.06*(1/h)*Math.exp(-h*3*t)*Math.sin(2*Math.PI*f0*h*t);
-          break;
-        case 'vibrato':
-          out[i] = 0.3*Math.sin(2*Math.PI*(f0+10*Math.sin(2*Math.PI*4*t))*t)*Math.exp(-t);
-          break;
-        case 'melody': {
-          const notes = forAudio ? [220,275,330,275,220] : [8,10,12,10,8];
-          const ni = Math.floor(tn * notes.length);
-          const nt = (tn * notes.length) % 1;
-          out[i] = 0.3*Math.sin(2*Math.PI*notes[Math.min(ni,notes.length-1)]*t)*Math.exp(-nt*3)*(1-Math.exp(-nt*20));
-          break;
+            out[i] += 0.06*(1/h)*Math.exp(-h*3*t)*Math.sin(2*Math.PI*220*h*t);
         }
+        break;
+      case 'vibrato': {
+        const f0 = 220, vD = 10, vR = 4;
+        for (let i = 0; i < Na; i++) {
+          const t = i / sr;
+          const phase = 2*Math.PI*f0*t - (vD/vR)*Math.cos(2*Math.PI*vR*t);
+          out[i] = 0.3 * Math.sin(phase) * Math.exp(-t);
+        }
+        break;
       }
-    }
-    if (noisy_) {
-      const nl = parseFloat(noiseLvl.value) * 0.5;
-      for (let i = 0; i < Na; i++) out[i] += (Math.random()-0.5)*nl;
+      case 'melody': {
+        const notes = [220,275,330,275,220];
+        let phase = 0;
+        for (let i = 0; i < Na; i++) {
+          const t = i / sr;
+          const tn = t / dur;
+          const ni = Math.min(Math.floor(tn * notes.length), notes.length - 1);
+          const nt = (tn * notes.length) % 1;
+          phase += 2 * Math.PI * notes[ni] / sr;
+          out[i] = 0.3 * Math.sin(phase) * Math.exp(-nt*3) * (1 - Math.exp(-nt*20));
+        }
+        break;
+      }
     }
     return out;
   }
 
-  playCleanBtn.addEventListener('click', () => playBuffer(makeAudioSig(sigSelect.value, false, 0, true), 44100));
-  playNoisyBtn.addEventListener('click', () => playBuffer(makeAudioSig(sigSelect.value, true, 0, true), 44100));
-  playDenoisedBtn.addEventListener('click', () => {
-    const threshold = parseFloat(threshSlider.value);
-    const noiseLevel = parseFloat(noiseLvl.value);
-    const type = sigSelect.value;
-    const sr = 44100;
+  // Spectral gating denoiser for audio-rate signals (FFT-based)
+  function spectralGate(cleanAudio, noiseLevel, threshFrac) {
+    const Na = cleanAudio.length;
+    // Add noise
+    const noisy = new Float32Array(Na);
+    for (let i = 0; i < Na; i++) noisy[i] = cleanAudio[i] + (Math.random()-0.5) * noiseLevel;
 
-    // Use the same CWT denoising that drives the visualization
-    const clean = makeCleanSig(type);
-    const noisy = addNoise(clean, noiseLevel);
-    const den = denoise(noisy, threshold); // 256-sample denoised, normalized to max 1
+    // STFT-based spectral gating with overlap-add using radix-2 FFT
+    const fftSize = 2048;
+    const hop = fftSize / 4;
+    const numFrames = Math.floor((Na - fftSize) / hop) + 1;
+    const out = new Float32Array(Na);
+    const winSum = new Float32Array(Na);
 
-    // Normalize noisy for a fair comparison
-    let nMax = 0;
-    for (let i = 0; i < N; i++) if (Math.abs(noisy[i]) > nMax) nMax = Math.abs(noisy[i]);
-    const noisyNorm = new Float32Array(N);
-    for (let i = 0; i < N; i++) noisyNorm[i] = noisy[i] / (nMax || 1);
+    // Hann window
+    const win = new Float32Array(fftSize);
+    for (let n = 0; n < fftSize; n++) win[n] = 0.5 - 0.5 * Math.cos(2 * Math.PI * n / fftSize);
 
-    // Local RMS ratio over a short window → high where signal survived, low where noise removed
-    const winLen = 20;
-    const gainEnv = new Float32Array(N);
-    for (let b = 0; b < N; b++) {
-      let pN = 0, pD = 0;
-      for (let k = 0; k < winLen; k++) {
-        const idx = Math.min(b + k, N - 1);
-        pN += noisyNorm[idx] * noisyNorm[idx];
-        pD += den[idx] * den[idx];
+    // Noise power per bin ≈ noiseLevel² * fftSize / 4 (for windowed noise)
+    const noisePow = noiseLevel * noiseLevel * fftSize / 4;
+    const thresh = threshFrac * 6; // scale slider to useful range
+
+    for (let f = 0; f < numFrames; f++) {
+      const offset = f * hop;
+      // Windowed frame -> FFT
+      const reF = new Float32Array(fftSize);
+      const imF = new Float32Array(fftSize);
+      for (let n = 0; n < fftSize; n++) {
+        reF[n] = (offset + n < Na ? noisy[offset + n] : 0) * win[n];
       }
-      gainEnv[b] = pN > 1e-8 ? Math.min(1, Math.sqrt(pD / pN)) : 0;
+      fft(reF, imF, false);
+
+      // Apply Wiener-like spectral gate: G = max(0, 1 - thresh * noisePow / |X|²)
+      for (let k = 0; k < fftSize; k++) {
+        const pow = reF[k]*reF[k] + imF[k]*imF[k];
+        const gain = pow > 0 ? Math.max(0, 1 - thresh * noisePow / pow) : 0;
+        reF[k] *= gain;
+        imF[k] *= gain;
+      }
+
+      // Inverse FFT
+      fft(reF, imF, true);
+
+      // Overlap-add with synthesis window
+      for (let n = 0; n < fftSize; n++) {
+        if (offset + n < Na) {
+          out[offset + n] += reF[n] * win[n];
+          winSum[offset + n] += win[n] * win[n];
+        }
+      }
     }
 
-    // Apply gain envelope to audio-rate noisy signal
-    const audioNoisy = makeAudioSig(type, true, 0, true);
-    const out = new Float32Array(audioNoisy.length);
-    for (let i = 0; i < audioNoisy.length; i++) {
-      const t = i / audioNoisy.length;
-      const g = gainEnv[Math.min(Math.floor(t * N), N - 1)];
-      out[i] = audioNoisy[i] * g;
+    // Normalize by window sum
+    for (let i = 0; i < Na; i++) {
+      if (winSum[i] > 1e-8) out[i] /= winSum[i];
     }
-    playBuffer(out, sr);
+    return { noisy, denoised: out };
+  }
+
+  playCleanBtn.addEventListener('click', () => {
+    playBuffer(makeAudioClean(sigSelect.value), 44100);
+  });
+
+  playNoisyBtn.addEventListener('click', () => {
+    const clean = makeAudioClean(sigSelect.value);
+    const nl = parseFloat(noiseLvl.value) * 0.5;
+    const noisy = new Float32Array(clean.length);
+    for (let i = 0; i < clean.length; i++) noisy[i] = clean[i] + (Math.random()-0.5)*nl;
+    playBuffer(noisy, 44100);
+  });
+
+  playDenoisedBtn.addEventListener('click', () => {
+    const clean = makeAudioClean(sigSelect.value);
+    const nl = parseFloat(noiseLvl.value) * 0.5;
+    const th = parseFloat(threshSlider.value);
+    const result = spectralGate(clean, nl, th);
+    playBuffer(result.denoised, 44100);
   });
 })();
 
