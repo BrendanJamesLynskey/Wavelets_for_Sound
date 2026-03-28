@@ -978,9 +978,10 @@ details[open] summary::before{transform:rotate(90deg)}
       <label>Blend <input type="range" id="crossBlend" min="0" max="1" value="1" step="0.05"> <span id="crossBlendVal">100% A-mag</span></label>
       <button id="playCrossA">♪ Magnitude source</button>
       <button id="playCrossB">♪ Phase source</button>
-      <button id="playCrossHybrid">♪ Cross-synthesis</button>
+      <button id="playCrossHybrid">♪ Cross-synthesis (STFT)</button>
+      <button id="playCrossWavelet">♪ Cross-synthesis (CWT)</button>
     </div>
-    <div class="viz-caption">Top: magnitude source scalogram · Middle: hybrid |W_A| × phase(W_B) · Bottom: phase source scalogram — the hybrid inherits the timbre of A and the pitch/rhythm of B</div>
+    <div class="viz-caption">Top: magnitude source scalogram · Middle: hybrid |W_A| × phase(W_B) · Bottom: phase source scalogram — the hybrid inherits the timbre of A and the pitch/rhythm of B · Two synthesis methods: STFT (fast, high fidelity) and CWT (Kronland-Martinet's original wavelet-domain approach)</div>
   </div>
 </section>
 
@@ -3631,39 +3632,50 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   const crossSr = 44100;
 
   function synthSpeechAudio() {
-    // Vowel sequence "ah-ee-oh" with transitions
+    // Vowel sequence "ah-ee-oh" — built from glottal source + one formant pass
     const sr = crossSr, dur = crossDur;
     const Na = Math.floor(sr * dur);
-    // Three vowel segments with different formant structures
-    const vowels = [
-      { f0: 150, F: [800,1200,2500], start: 0, end: 0.8 },   // "ah"
-      { f0: 170, F: [270,2300,3000], start: 0.85, end: 1.7 },  // "ee"
-      { f0: 140, F: [500,900,2300],  start: 1.75, end: 2.5 }   // "oh"
-    ];
     const out = new Float32Array(Na);
+
+    // Three vowel segments: [start, end, f0, formants:[{f, bw, gain}]]
+    const vowels = [
+      { s: 0,    e: 0.8,  f0: 150, fmt: [{f:800,bw:80,g:1},{f:1200,bw:100,g:0.7},{f:2500,bw:150,g:0.35}] },
+      { s: 0.85, e: 1.7,  f0: 170, fmt: [{f:270,bw:60,g:1},{f:2300,bw:150,g:0.5},{f:3000,bw:200,g:0.3}] },
+      { s: 1.75, e: 2.5,  f0: 140, fmt: [{f:500,bw:70,g:1},{f:900,bw:100,g:0.6},{f:2300,bw:150,g:0.3}] }
+    ];
+
     for (const vow of vowels) {
-      const seg = synthVoice(vow.f0, vow.end - vow.start, sr);
-      // Re-filter with this vowel's specific formants
-      const filtered = new Float32Array(seg.length);
-      for (const fFreq of vow.F) {
-        const w0 = 2*Math.PI*fFreq/sr;
-        const bw = fFreq * 0.12;
-        const alpha = Math.sin(w0) / (2 * fFreq / bw);
-        const b0 = alpha, a1 = -2*Math.cos(w0), a2 = 1-alpha;
-        const norm = 1 + alpha;
-        let x1=0,x2=0,y1=0,y2=0;
-        for (let i = 0; i < seg.length; i++) {
-          const x0 = seg[i];
-          const y0 = (b0*x0 - b0*x2 - a1*y1 - a2*y2) / norm;
-          filtered[i] += y0;
-          x2=x1; x1=x0; y2=y1; y1=y0;
+      const segLen = Math.floor((vow.e - vow.s) * sr);
+      // Glottal source: pulse train with spectral tilt
+      const source = new Float32Array(segLen);
+      for (let h = 1; h <= 25; h++) {
+        const fh = vow.f0 * h;
+        if (fh > sr / 2) break;
+        const srcAmp = 1 / (h * h);
+        for (let i = 0; i < segLen; i++) {
+          const t = i / sr;
+          const env = Math.min(1, t / 0.02) * Math.min(1, (vow.e - vow.s - t) / 0.02);
+          source[i] += srcAmp * env * Math.sin(2 * Math.PI * fh * t);
         }
       }
-      const offset = Math.floor(vow.start * sr);
-      for (let i = 0; i < filtered.length && offset+i < Na; i++)
-        out[offset+i] += filtered[i];
+      // Single formant filter pass
+      const filtered = new Float32Array(segLen);
+      for (const fmt of vow.fmt) {
+        const w0 = 2 * Math.PI * fmt.f / sr;
+        const alpha = Math.sin(w0) * Math.sinh(Math.log(2) / 2 * (fmt.bw / fmt.f) * w0 / Math.sin(w0));
+        const b0 = alpha * fmt.g, a1 = -2 * Math.cos(w0), a2 = 1 - alpha, norm = 1 + alpha;
+        let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+        for (let i = 0; i < segLen; i++) {
+          const x0 = source[i];
+          const y0 = (b0 * x0 - b0 * x2 - a1 * y1 - a2 * y2) / norm;
+          filtered[i] += y0;
+          x2 = x1; x1 = x0; y2 = y1; y1 = y0;
+        }
+      }
+      const offset = Math.floor(vow.s * sr);
+      for (let i = 0; i < segLen && offset + i < Na; i++)
+        out[offset + i] += filtered[i];
     }
-    // Normalize
     let mx = 0;
     for (let i = 0; i < Na; i++) if (Math.abs(out[i]) > mx) mx = Math.abs(out[i]);
     if (mx > 0) for (let i = 0; i < Na; i++) out[i] = out[i] / mx * 0.35;
@@ -3792,6 +3804,111 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     if (mx > 0) for (let i = 0; i < Na; i++) out[i] = out[i] / mx * 0.4;
 
     playBuffer(out, sr);
+  });
+
+  // ── Wavelet (CWT) cross-synthesis — as Kronland-Martinet described ──
+  // FFT-accelerated CWT: convolve signal with wavelet at each scale in freq domain
+  function cwtViaFFT(sig, wScales, omega0) {
+    const Ns = sig.length;
+    let M = 1; while (M < Ns * 2) M <<= 1; // pad to avoid circular convolution
+    const sigRe = new Float32Array(M);
+    const sigIm = new Float32Array(M);
+    for (let i = 0; i < Ns; i++) sigRe[i] = sig[i];
+    fft(sigRe, sigIm, false);
+
+    return wScales.map(a => {
+      // Build Morlet wavelet spectrum: Psi_a(omega) = sqrt(a) * exp(-(a*omega - omega0)^2 / 2)
+      const wRe = new Float32Array(M);
+      const wIm = new Float32Array(M);
+      for (let k = 0; k < M; k++) {
+        let omega = 2 * Math.PI * k / M;
+        if (k > M / 2) omega -= 2 * Math.PI;
+        const psi = Math.sqrt(a) * Math.exp(-0.5 * (a * omega - omega0) * (a * omega - omega0));
+        // W(a,b) = IFFT[ X(omega) * Psi*(a*omega) ]  (Psi is real for Morlet)
+        wRe[k] = sigRe[k] * psi;
+        wIm[k] = sigIm[k] * psi;
+      }
+      fft(wRe, wIm, true);
+      const re = new Float32Array(Ns);
+      const im = new Float32Array(Ns);
+      for (let i = 0; i < Ns; i++) { re[i] = wRe[i]; im[i] = wIm[i]; }
+      return { re, im };
+    });
+  }
+
+  // Reconstruct from CWT coefficients (real part, weighted sum over scales)
+  function reconstructFromCWT(cwt, wScales) {
+    const Ns = cwt[0].re.length;
+    const out = new Float32Array(Ns);
+    for (let si = 0; si < wScales.length; si++) {
+      const a = wScales[si];
+      const da = si < wScales.length - 1 ? wScales[si + 1] - wScales[si]
+                : wScales[si] - wScales[si - 1];
+      const w = da / (a * a);
+      for (let i = 0; i < Ns; i++) out[i] += cwt[si].re[i] * w;
+    }
+    return out;
+  }
+
+  const playCrossWaveletBtn = document.getElementById('playCrossWavelet');
+  playCrossWaveletBtn.addEventListener('click', () => {
+    const blend = parseFloat(blendSlider.value);
+
+    // Downsample to 8000 Hz for tractable CWT computation
+    const wSr = 8000;
+    const wDur = crossDur;
+    const wNa = Math.floor(wSr * wDur);
+
+    // Get full-rate audio and downsample
+    const fullA = makeAudioForType(selA.value);
+    const fullB = makeAudioForType(selB.value);
+    const sigA = new Float32Array(wNa);
+    const sigB = new Float32Array(wNa);
+    for (let i = 0; i < wNa; i++) {
+      const fi = Math.floor(i * crossSr / wSr);
+      sigA[i] = fi < fullA.length ? fullA[fi] : 0;
+      sigB[i] = fi < fullB.length ? fullB[fi] : 0;
+    }
+
+    // CWT with log-spaced scales covering 80 Hz to 3500 Hz
+    // scale a maps to freq f ≈ omega0 * wSr / (2*pi*a)
+    // So a = omega0 * wSr / (2*pi*f)
+    const wOmega0 = 6;
+    const numWScales = 30;
+    const fLow = 80, fHigh = 3500;
+    const wScales = [];
+    for (let i = 0; i < numWScales; i++) {
+      const f = fLow * Math.pow(fHigh / fLow, i / (numWScales - 1));
+      wScales.push(wOmega0 * wSr / (2 * Math.PI * f));
+    }
+    wScales.reverse(); // small scale (high freq) first
+
+    const cwtA = cwtViaFFT(sigA, wScales, wOmega0);
+    const cwtB = cwtViaFFT(sigB, wScales, wOmega0);
+
+    // Cross-synthesis in wavelet domain: |CWT_A| × phase(CWT_B)
+    const cwtHybrid = cwtA.map((rowA, si) => {
+      const re = new Float32Array(wNa);
+      const im = new Float32Array(wNa);
+      for (let b = 0; b < wNa; b++) {
+        const magA = Math.sqrt(rowA.re[b] ** 2 + rowA.im[b] ** 2);
+        const magB = Math.sqrt(cwtB[si].re[b] ** 2 + cwtB[si].im[b] ** 2);
+        const mag = magA * blend + magB * (1 - blend);
+        const phB = Math.atan2(cwtB[si].im[b], cwtB[si].re[b]);
+        re[b] = mag * Math.cos(phB);
+        im[b] = mag * Math.sin(phB);
+      }
+      return { re, im };
+    });
+
+    const recon = reconstructFromCWT(cwtHybrid, wScales);
+
+    // Normalize
+    let mx = 0;
+    for (let i = 0; i < wNa; i++) if (Math.abs(recon[i]) > mx) mx = Math.abs(recon[i]);
+    if (mx > 0) for (let i = 0; i < wNa; i++) recon[i] = recon[i] / mx * 0.4;
+
+    playBuffer(recon, wSr);
   });
 })();
 
