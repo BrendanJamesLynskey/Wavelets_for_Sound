@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Wavelets for Sound — Kronland-Martinet, Grossmann & Morlet</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body, {delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false});"></script>
 <style>
 :root {
   --bg: #0a0b0f;
@@ -188,20 +192,20 @@ p{margin-bottom:1.2em}
 .math{
   display:block;
   text-align:center;
-  padding:1.2em;
+  padding:1.4em 1.2em;
   margin:1.5em 0;
   background:var(--bg2);
   border-left:3px solid var(--accent);
-  font-family:'Courier New',monospace;
-  font-size:.95rem;
-  color:var(--accent2);
+  font-size:1.15rem;
+  color:var(--fg);
   overflow-x:auto;
   border-radius:0 4px 4px 0;
 }
+.math .katex{font-size:1.25em}
+.math-inline .katex{font-size:1.0em}
 .math-inline{
-  font-family:'Courier New',monospace;
-  color:var(--accent2);
-  font-size:.9em;
+  color:var(--fg);
+  font-size:.95em;
 }
 
 /* TIMELINE */
@@ -503,13 +507,13 @@ details[open] summary::before{transform:rotate(90deg)}
   </p>
 
   <div class="math">
-    W(a, b) = (1/√|a|) · ∫ x(t) · ψ*((t − b) / a) dt
+    $$W(a, b) = \frac{1}{\sqrt{|a|}} \int_{-\infty}^{\infty} x(t)\, \psi^*\!\left(\frac{t - b}{a}\right) dt$$
   </div>
 
   <p>
-    Here <span class="math-inline">a</span> is the scale (controlling frequency resolution — large <span class="math-inline">a</span> catches low frequencies,
-    small <span class="math-inline">a</span> catches high), <span class="math-inline">b</span> is the translation (position in time),
-    and <span class="math-inline">ψ</span> is the "mother wavelet." The factor <span class="math-inline">1/√|a|</span> normalises energy across scales.
+    Here $a$ is the scale (controlling frequency resolution — large $a$ catches low frequencies,
+    small $a$ catches high), $b$ is the translation (position in time),
+    and $\psi$ is the "mother wavelet." The factor $1/\sqrt{|a|}$ normalises energy across scales.
   </p>
 
   <h3>Why not just use the STFT?</h3>
@@ -563,17 +567,17 @@ details[open] summary::before{transform:rotate(90deg)}
     the wavelet must satisfy the admissibility condition:
   </p>
   <div class="math">
-    C_ψ = ∫₀^∞ |Ψ(ω)|² / ω  dω  &lt; ∞
+    $$C_\psi = \int_0^{\infty} \frac{|\hat{\Psi}(\omega)|^2}{\omega}\, d\omega \;<\; \infty$$
   </div>
   <p>
     This requires that the wavelet has zero mean (its integral over all time is zero) and that its
-    Fourier transform <span class="math-inline">Ψ(ω)</span> decays sufficiently fast. The Morlet wavelet satisfies this
+    Fourier transform $\hat{\Psi}(\omega)$ decays sufficiently fast. The Morlet wavelet satisfies this
     (approximately — a small correction term is needed), while pure Gaussians do not.
   </p>
 
   <h3>The Reconstruction Formula</h3>
   <div class="math">
-    x(t) = (1/C_ψ) · ∫∫ W(a,b) · (1/√|a|) · ψ((t−b)/a) · da·db / a²
+    $$x(t) = \frac{1}{C_\psi} \iint W(a,b)\, \frac{1}{\sqrt{|a|}}\, \psi\!\left(\frac{t-b}{a}\right) \frac{da\,db}{a^2}$$
   </div>
   <p>
     This double integral reconstructs the original signal perfectly from its wavelet coefficients.
@@ -588,15 +592,15 @@ details[open] summary::before{transform:rotate(90deg)}
       <p>
         The deepest insight of Grossmann and Morlet was that the CWT is not just a useful trick —
         it arises inevitably from the representation theory of the <em>affine group</em> (also called
-        the "ax+b group"), the group of transformations <span class="math-inline">t ↦ at + b</span>
-        with <span class="math-inline">a > 0</span>, <span class="math-inline">b ∈ ℝ</span>.
+        the "ax+b group"), the group of transformations $t \mapsto at + b$
+        with $a > 0$, $b \in \mathbb{R}$.
       </p>
       <div class="math">
-        Group law: (a₁, b₁) · (a₂, b₂) = (a₁a₂, a₁b₂ + b₁)
+        $$\text{Group law:}\quad (a_1, b_1) \cdot (a_2, b_2) = (a_1 a_2,\; a_1 b_2 + b_1)$$
       </div>
       <p>
         For any "admissible" function ψ (one satisfying the admissibility condition),
-        the map <span class="math-inline">(a, b) ↦ T_{a,b}ψ = (1/√a)·ψ((t−b)/a)</span>
+        the map $(a, b) \mapsto T_{a,b}\psi = \frac{1}{\sqrt{a}}\,\psi\!\left(\frac{t-b}{a}\right)$
         is a <em>square-integrable representation</em> of this group on L²(ℝ).
         The resolution of the identity — the reconstruction formula — then follows directly
         from the general theory of such representations, as shown by Grossmann, Morlet and Paul (1985).
@@ -608,12 +612,12 @@ details[open] summary::before{transform:rotate(90deg)}
         logarithmic frequency spacing, matching the musical scale.
       </p>
       <div class="math">
-        Resolution of identity: ∫∫ |ψ_{a,b}〉〈ψ_{a,b}| da·db/a² = C_ψ · I
+        $$\text{Resolution of identity:}\quad \iint |\psi_{a,b}\rangle\langle\psi_{a,b}|\; \frac{da\,db}{a^2} = C_\psi \cdot I$$
       </div>
       <p>
         This is the Dirac notation version of the reconstruction formula.
-        It says: the wavelet "atoms" <span class="math-inline">ψ_{a,b}</span>,
-        weighted by <span class="math-inline">da·db/a²</span> (the invariant measure on the affine group),
+        It says: the wavelet "atoms" $\psi_{a,b}$,
+        weighted by $da\,db/a^2$ (the invariant measure on the affine group),
         form a complete decomposition of the identity operator.
         Any signal can be expanded in these atoms and recovered exactly.
       </p>
@@ -664,11 +668,11 @@ details[open] summary::before{transform:rotate(90deg)}
   </p>
 
   <div class="math">
-    ψ(t) = π^(−1/4) · exp(iω₀t) · exp(−t²/2)
+    $$\psi(t) = \pi^{-1/4}\, e^{i\omega_0 t}\, e^{-t^2/2}$$
   </div>
   <p>
-    The parameter <span class="math-inline">ω₀</span> controls the number of oscillations inside the Gaussian window.
-    A typical choice is <span class="math-inline">ω₀ = 5</span> or <span class="math-inline">6</span>, giving good frequency resolution.
+    The parameter $\omega_0$ controls the number of oscillations inside the Gaussian window.
+    A typical choice is $\omega_0 = 5$ or $6$, giving good frequency resolution.
     Lower values give better time resolution at the cost of frequency precision.
   </p>
 
@@ -996,11 +1000,11 @@ details[open] summary::before{transform:rotate(90deg)}
     without introducing musical noise artefacts.
   </p>
   <div class="math">
-    W_thresh(a,b) = sign(W(a,b)) · max(0, |W(a,b)| − λ)
+    $$W_{\text{thresh}}(a,b) = \operatorname{sign}\bigl(W(a,b)\bigr) \cdot \max\bigl(0,\; |W(a,b)| - \lambda\bigr)$$
   </div>
   <p>
     Donoho and Johnstone (1994) proved that for Gaussian noise with standard deviation σ,
-    the optimal threshold is <span class="math-inline">λ = σ√(2 log N)</span>.
+    the optimal threshold is $\lambda = \sigma\sqrt{2 \log N}$.
     In practice, the wavelet denoising threshold is estimated from the noise level in
     the finest-scale coefficients, which are dominated by noise.
   </p>
@@ -1018,9 +1022,9 @@ details[open] summary::before{transform:rotate(90deg)}
       </label>
       <label><span class="noise-badge">noise</span>Level <input type="range" id="noiseLevel" min="0" max="0.8" value="0.3" step="0.05"> <span id="noiseLevelVal">0.30</span></label>
       <label>Threshold λ <input type="range" id="denoiseThresh" min="0" max="1" value="0.35" step="0.02"> <span id="denoiseThreshVal">0.35</span></label>
+      <button id="playClean">♪ Clean</button>
       <button id="playNoisy">♪ Noisy</button>
       <button id="playDenoised">♪ Denoised</button>
-      <button id="playClean">♪ Clean original</button>
     </div>
     <div class="viz-caption">Top: clean signal · Middle: noisy signal · Bottom: denoised — drag threshold to see how much noise is removed vs signal distortion</div>
   </div>
@@ -1197,6 +1201,125 @@ function generateTone(freq, dur, sr, envelope) {
     out[i] = env * Math.sin(2 * Math.PI * freq * t);
   }
   return out;
+}
+
+// ── Realistic Synthesis Toolkit ────────────────────────────────
+// Piano: inharmonic partials, per-partial decay, hammer noise burst, body resonance
+function synthPiano(f0, dur, sr) {
+  const N = Math.floor(dur * sr);
+  const out = new Float32Array(N);
+  // Piano string inharmonicity: B ≈ 0.0004 for mid-range
+  const B = 0.0004;
+  for (let h = 1; h <= 12; h++) {
+    const fh = f0 * h * Math.sqrt(1 + B * h * h); // stretched partial
+    if (fh > sr / 2) break;
+    // Per-partial amplitude and decay (higher partials quieter, decay faster)
+    const amp = Math.pow(h, -1.1) * (h <= 3 ? 1 : 0.7);
+    const decay = 1.5 + h * 0.8;
+    for (let i = 0; i < N; i++) {
+      const t = i / sr;
+      const env = Math.exp(-decay * t) * (1 - Math.exp(-t * 200));
+      out[i] += 0.06 * amp * env * Math.sin(2 * Math.PI * fh * t);
+    }
+  }
+  // Hammer noise burst (first ~10ms)
+  for (let i = 0; i < Math.min(N, Math.floor(0.012 * sr)); i++) {
+    const t = i / sr;
+    out[i] += 0.08 * (Math.random() - 0.5) * Math.exp(-t * 300);
+  }
+  return out;
+}
+
+// Bell: inharmonic partials (non-integer ratios), long ring
+function synthBell(f0, dur, sr) {
+  const N = Math.floor(dur * sr);
+  const out = new Float32Array(N);
+  // Inharmonic partial ratios typical of a bronze bell
+  const ratios = [1, 2.09, 3.0, 4.16, 5.43, 6.27, 7.57, 8.98];
+  const amps   = [1, 0.6,  0.5, 0.35, 0.25, 0.18, 0.12, 0.08];
+  const decays  = [2, 2.5,  3.5, 4.5,  5.5,  7,    9,    11];
+  for (let h = 0; h < ratios.length; h++) {
+    const fh = f0 * ratios[h];
+    if (fh > sr / 2) break;
+    for (let i = 0; i < N; i++) {
+      const t = i / sr;
+      const env = Math.exp(-decays[h] * t) * (1 - Math.exp(-t * 500));
+      out[i] += 0.06 * amps[h] * env * Math.sin(2 * Math.PI * fh * t + h * 0.4);
+    }
+  }
+  // Strike transient
+  for (let i = 0; i < Math.min(N, Math.floor(0.005 * sr)); i++) {
+    const t = i / sr;
+    out[i] += 0.1 * (Math.random() - 0.5) * Math.exp(-t * 600);
+  }
+  return out;
+}
+
+// Flute: breathy, slow attack, limited harmonics, subtle vibrato
+function synthFlute(f0, dur, sr) {
+  const N = Math.floor(dur * sr);
+  const out = new Float32Array(N);
+  for (let h = 1; h <= 6; h++) {
+    const amp = h === 1 ? 1 : (h === 2 ? 0.4 : Math.pow(h, -2.5));
+    for (let i = 0; i < N; i++) {
+      const t = i / sr;
+      // Slow attack (~80ms), gentle vibrato after 0.3s
+      const attack = Math.min(1, t / 0.08);
+      const vib = t > 0.3 ? 3 * Math.sin(2 * Math.PI * 5.2 * t) : 0;
+      const env = attack * attack * Math.exp(-0.5 * t) * (0.7 + 0.3 * Math.exp(-2 * t));
+      out[i] += 0.08 * amp * env * Math.sin(2 * Math.PI * (f0 + vib) * h * t);
+    }
+  }
+  // Breath noise
+  for (let i = 0; i < N; i++) {
+    const t = i / sr;
+    const breathEnv = Math.min(1, t / 0.05) * Math.exp(-1.5 * t);
+    out[i] += 0.015 * breathEnv * (Math.random() - 0.5);
+  }
+  return out;
+}
+
+// Voice-like: formant synthesis with source-filter model
+function synthVoice(f0, dur, sr) {
+  const N = Math.floor(dur * sr);
+  const out = new Float32Array(N);
+  // Glottal pulse train (series of harmonics with -12dB/octave rolloff)
+  for (let h = 1; h <= 20; h++) {
+    const fh = f0 * h;
+    if (fh > sr / 2) break;
+    const srcAmp = 1 / (h * h); // -12dB/octave source spectrum
+    for (let i = 0; i < N; i++) {
+      const t = i / sr;
+      out[i] += srcAmp * Math.sin(2 * Math.PI * fh * t) * Math.exp(-0.8 * t);
+    }
+  }
+  // Apply formant filter (vowel "ah": F1≈800, F2≈1200, F3≈2500)
+  // Simplified: boost energy near formant frequencies using resonant gains
+  const formants = [
+    { f: 800, bw: 100, gain: 1.0 },
+    { f: 1200, bw: 120, gain: 0.7 },
+    { f: 2500, bw: 200, gain: 0.4 }
+  ];
+  // Apply as parallel second-order filters (biquad simulation)
+  const filtered = new Float32Array(N);
+  for (const fmt of formants) {
+    const w0 = 2 * Math.PI * fmt.f / sr;
+    const alpha = Math.sin(w0) / (2 * fmt.f / fmt.bw);
+    const b0 = alpha * fmt.gain, a1 = -2 * Math.cos(w0), a2 = 1 - alpha;
+    const norm = 1 + alpha;
+    let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    for (let i = 0; i < N; i++) {
+      const x0 = out[i];
+      const y0 = (b0 * x0 - b0 * x2 - a1 * y1 - a2 * y2) / norm;
+      filtered[i] += y0;
+      x2 = x1; x1 = x0; y2 = y1; y1 = y0;
+    }
+  }
+  // Mix and normalize
+  let mx = 0;
+  for (let i = 0; i < N; i++) if (Math.abs(filtered[i]) > mx) mx = Math.abs(filtered[i]);
+  if (mx > 0) for (let i = 0; i < N; i++) filtered[i] = filtered[i] / mx * 0.3;
+  return filtered;
 }
 
 // Morlet wavelet
@@ -1784,30 +1907,51 @@ function computeCWT(signal, scales, omega0, N) {
     const sr = 44100;
     const dur = 2;
     const type = sigSelect.value;
-    const samples = new Float32Array(sr * dur);
-    for (let i = 0; i < samples.length; i++) {
-      const t = i / sr;
-      const tn = t / dur;
-      switch (type) {
-        case 'piano':
-          for (let h = 1; h <= 8; h++)
-            samples[i] += 0.1 * (1/h) * Math.exp(-h*2*t) * Math.sin(2*Math.PI*220*h*t);
-          break;
-        case 'chirp':
-          samples[i] = 0.3 * Math.sin(2*Math.PI*(200+1000*tn*tn)*t) * (0.5+0.5*Math.sin(Math.PI*tn));
-          break;
-        case 'vibrato':
-          samples[i] = 0.3 * Math.sin(2*Math.PI*(440+30*Math.sin(2*Math.PI*5*t))*t) * Math.exp(-t);
-          break;
-        case 'attack':
-          if (t < 0.03) samples[i] = 0.5*(Math.random()-0.5)*(1-t/0.03);
-          samples[i] += 0.3*Math.sin(2*Math.PI*330*t)*Math.max(0,Math.min(1,t/0.03))*Math.exp(-t*2);
-          break;
-        case 'two_notes':
-          if (t < 1) samples[i] = 0.3*Math.sin(2*Math.PI*330*t)*Math.exp(-t*3);
-          else samples[i] = 0.3*Math.sin(2*Math.PI*440*(t-1))*Math.exp(-(t-1)*3);
-          break;
+    let samples;
+    switch (type) {
+      case 'piano':
+        samples = synthPiano(220, dur, sr);
+        break;
+      case 'chirp': {
+        // Chirp with proper phase accumulation
+        samples = new Float32Array(sr * dur);
+        let phase = 0;
+        for (let i = 0; i < samples.length; i++) {
+          const t = i / sr;
+          const tn = t / dur;
+          const f = 200 + 1000 * tn * tn;
+          phase += 2 * Math.PI * f / sr;
+          samples[i] = 0.3 * Math.sin(phase) * (0.5 + 0.5 * Math.sin(Math.PI * tn));
+        }
+        break;
       }
+      case 'vibrato': {
+        // Correct phase accumulation vibrato
+        samples = new Float32Array(sr * dur);
+        const f0v = 440, vDepth = 30, vRate = 5;
+        for (let i = 0; i < samples.length; i++) {
+          const t = i / sr;
+          const phase = 2*Math.PI*f0v*t - (vDepth/vRate)*Math.cos(2*Math.PI*vRate*t);
+          samples[i] = 0.3 * Math.sin(phase) * Math.exp(-t * 0.5);
+        }
+        break;
+      }
+      case 'attack': {
+        // Percussive attack + sustained tone (bell-like)
+        samples = synthBell(330, dur, sr);
+        break;
+      }
+      case 'two_notes': {
+        // Two piano notes in sequence
+        const note1 = synthPiano(330, 1, sr);
+        const note2 = synthPiano(440, 1, sr);
+        samples = new Float32Array(sr * dur);
+        for (let i = 0; i < note1.length && i < samples.length; i++) samples[i] = note1[i];
+        for (let i = 0; i < note2.length && sr + i < samples.length; i++) samples[sr + i] = note2[i];
+        break;
+      }
+      default:
+        samples = new Float32Array(sr * dur);
     }
     playBuffer(samples, sr);
   });
@@ -2094,11 +2238,16 @@ function computeCWT(signal, scales, omega0, N) {
     const dur = 2;
     const samples = new Float32Array(sr * dur);
     const f0 = 220;
+    const B = 0.0004; // piano inharmonicity
     for (let i = 0; i < samples.length; i++) {
       const t = i / sr;
       for (let h = 1; h <= nPartials; h++) {
-        samples[i] += 0.08 * (1/h) * Math.exp(-h*decay*0.15*t) * Math.sin(2*Math.PI*f0*h*t);
+        const fh = f0 * h * Math.sqrt(1 + B * h * h);
+        samples[i] += 0.06 * Math.pow(h, -1.1) * Math.exp(-h*decay*0.15*t) * (1-Math.exp(-t*200)) * Math.sin(2*Math.PI*fh*t);
       }
+      // Hammer noise on original only
+      if (nPartials >= 16 && t < 0.012)
+        samples[i] += 0.06 * (Math.random()-0.5) * Math.exp(-t*300);
     }
     return samples;
   }
@@ -2237,35 +2386,51 @@ function computeCWT(signal, scales, omega0, N) {
     const sr = 44100;
     const dur = 2;
     const type = sigSelect.value;
-    const samples = new Float32Array(sr * dur);
+    let samples;
     switch (type) {
-      case 'clicks':
-        for (let i = 0; i < samples.length; i++) samples[i] = (Math.random()-0.5)*0.02;
-        [0.25,0.5,0.75].forEach(t => {
-          const pos = Math.floor(t*sr*dur);
-          for (let k = -50; k <= 50; k++) {
-            const idx = pos+k;
-            if (idx >= 0 && idx < samples.length) samples[idx] += 0.5*Math.exp(-Math.abs(k)/10);
+      case 'clicks': {
+        samples = new Float32Array(sr * dur);
+        for (let i = 0; i < samples.length; i++) samples[i] = (Math.random()-0.5)*0.015;
+        [0.25,0.5,0.75].forEach(tPos => {
+          const pos = Math.floor(tPos*sr*dur);
+          // Short percussive click with a bit of ring
+          for (let k = 0; k < Math.floor(0.008*sr); k++) {
+            const idx = pos + k;
+            if (idx >= 0 && idx < samples.length)
+              samples[idx] += 0.5 * Math.exp(-k/(0.001*sr)) * Math.sin(2*Math.PI*2000*k/sr);
           }
         });
         break;
+      }
       case 'onset':
-        for (let i = 0; i < samples.length; i++) {
-          const t = i/sr;
-          if (t > 0.5 && t < 0.55) samples[i] = (Math.random()-0.5)*0.6;
-          if (t >= 0.55) samples[i] = 0.3*Math.sin(2*Math.PI*330*t)*Math.exp(-(t-0.55)*3);
-        }
+        // Bell-like onset
+        samples = synthBell(330, dur, sr);
         break;
       case 'speech':
-        for (let i = 0; i < samples.length; i++) {
-          const t = i/sr;
-          if (t<0.4) samples[i]=0.3*Math.sin(2*Math.PI*250*t)*Math.sin(Math.PI*t/0.4);
-          else if(t<0.5) samples[i]=(Math.random()-0.5)*0.4;
-          else if(t<1) samples[i]=0.3*Math.sin(2*Math.PI*350*(t-0.5))*Math.sin(Math.PI*(t-0.5)/0.5);
-          else if(t<1.1) samples[i]=(Math.random()-0.5)*0.4;
-          else samples[i]=0.3*Math.sin(2*Math.PI*280*(t-1.1))*Math.exp(-(t-1.1)*3);
+        // Three synthetic "syllables" with voiced segments + plosive bursts
+        samples = new Float32Array(sr * dur);
+        const syllables = [
+          { f0: 150, start: 0, dur: 0.35 },
+          { f0: 180, start: 0.5, dur: 0.4 },
+          { f0: 140, start: 1.1, dur: 0.5 }
+        ];
+        for (const syl of syllables) {
+          // Plosive burst before each syllable
+          const burstStart = Math.floor(syl.start * sr) - Math.floor(0.02 * sr);
+          for (let k = 0; k < Math.floor(0.02 * sr); k++) {
+            const idx = burstStart + k;
+            if (idx >= 0 && idx < samples.length)
+              samples[idx] += 0.3 * (Math.random()-0.5) * Math.exp(-k/(0.003*sr));
+          }
+          // Voiced formant segment
+          const voiceSeg = synthVoice(syl.f0, syl.dur, sr);
+          const offset = Math.floor(syl.start * sr);
+          for (let k = 0; k < voiceSeg.length && offset+k < samples.length; k++)
+            samples[offset+k] += voiceSeg[k];
         }
         break;
+      default:
+        samples = new Float32Array(sr * dur);
     }
     playBuffer(samples, sr);
   });
@@ -2359,36 +2524,9 @@ function computeCWT(signal, scales, omega0, N) {
   stretchSlider.addEventListener('input', draw);
   window.addEventListener('resize', draw);
 
-  function makeOrigSound() {
-    const sr = 44100;
-    const dur = 1;
-    const samples = new Float32Array(sr * dur);
-    for (let i = 0; i < samples.length; i++) {
-      const t = i / sr;
-      for (let h = 1; h <= 6; h++)
-        samples[i] += 0.08*(1/h)*Math.exp(-h*3*t)*Math.sin(2*Math.PI*220*h*t)*(1-Math.exp(-t*100));
-    }
-    return samples;
-  }
+  function makeOrigSound() { return synthPiano(220, 1, 44100); }
 
   playOrigBtn.addEventListener('click', () => playBuffer(makeOrigSound(), 44100));
-  playStretchedBtn.addEventListener('click', () => {
-    const factor = parseFloat(stretchSlider.value);
-    const orig = makeOrigSound();
-    const sr = 44100;
-    const newLen = Math.floor(orig.length * factor);
-    const stretched = new Float32Array(newLen);
-    // Simple time-stretch by interpolation (keeps pitch approximately constant for small stretches)
-    for (let i = 0; i < newLen; i++) {
-      const origIdx = i / factor;
-      const idx0 = Math.floor(origIdx);
-      const frac = origIdx - idx0;
-      const v0 = idx0 < orig.length ? orig[idx0] : 0;
-      const v1 = idx0+1 < orig.length ? orig[idx0+1] : 0;
-      stretched[i] = v0 + frac*(v1-v0);
-    }
-    playBuffer(stretched, sr);
-  });
 })();
 
 // ── CHAPTER 7: Pitch Shifting ──────────────────────────────────
@@ -2483,35 +2621,16 @@ function computeCWT(signal, scales, omega0, N) {
   semiSlider.addEventListener('input', draw);
   window.addEventListener('resize', draw);
 
-  function makeOrigSound() {
-    const sr = 44100;
-    const dur = 1;
-    const samples = new Float32Array(sr * dur);
-    for (let i = 0; i < samples.length; i++) {
-      const t = i / sr;
-      for (let h = 1; h <= 6; h++)
-        samples[i] += 0.08*(1/h)*Math.exp(-h*3*t)*Math.sin(2*Math.PI*220*h*t)*(1-Math.exp(-t*100));
-    }
-    return samples;
-  }
+  function makeOrigSound() { return synthPiano(220, 1, 44100); }
 
   playOrigBtn.addEventListener('click', () => playBuffer(makeOrigSound(), 44100));
   playShiftedBtn.addEventListener('click', () => {
     const semitones = parseInt(semiSlider.value);
     const ratio = Math.pow(2, semitones / 12);
     const sr = 44100;
-    const dur = 1;
-    const f0 = 220;
-    // Wavelet-style pitch shift: keep the envelope (duration) the same,
-    // but resynthesise each harmonic at the shifted frequency.
-    const samples = new Float32Array(sr * dur);
-    for (let i = 0; i < samples.length; i++) {
-      const t = i / sr;
-      for (let h = 1; h <= 6; h++) {
-        const env = Math.exp(-h * 3 * t) * (1 - Math.exp(-t * 100));
-        samples[i] += 0.08 * (1/h) * env * Math.sin(2 * Math.PI * f0 * ratio * h * t);
-      }
-    }
+    const f0 = 220 * ratio;
+    // Pitch-shifted piano: same envelope, transposed frequency
+    const samples = synthPiano(f0, 1, sr);
     playBuffer(samples, sr);
   });
 })();
@@ -2626,13 +2745,15 @@ function computeCWT(signal, scales, omega0, N) {
     const sr = 44100;
     const dur = 2;
     const f0 = 220;
-    const nHarm = 8;
+    const B = 0.0004;
+    const nHarm = 12;
     const cutoff = parseInt(cutoffSlider.value);
     const filterType = filterSelect.value;
     const samples = new Float32Array(sr * dur);
-    // Time-varying: filtered harmonics fade out from t=0.2s to t=0.6s
     const rampStart = 0.2, rampEnd = 0.6;
     for (let h = 1; h <= nHarm; h++) {
+      const fh = f0 * h * Math.sqrt(1 + B * h * h);
+      if (fh > sr / 2) break;
       const si = Math.floor((h / nHarm) * 40);
       let pass = true;
       switch (filterType) {
@@ -2641,6 +2762,7 @@ function computeCWT(signal, scales, omega0, N) {
         case 'bandpass': pass = si >= cutoff-8 && si < cutoff+8; break;
         case 'notch':    pass = !(si >= cutoff-5 && si < cutoff+5); break;
       }
+      const decay = 1.5 + h * 0.5;
       for (let i = 0; i < samples.length; i++) {
         const t = i / sr;
         let amp = 1.0;
@@ -2649,8 +2771,14 @@ function computeCWT(signal, scales, omega0, N) {
           amp = 1.0 - evolve;
         }
         if (amp < 0.001) continue;
-        samples[i] += amp * 0.08*(1/h)*Math.exp(-h*1.5*t)*Math.sin(2*Math.PI*f0*h*t);
+        const env = Math.exp(-decay * t) * (1 - Math.exp(-t * 200));
+        samples[i] += amp * 0.06 * Math.pow(h, -1.1) * env * Math.sin(2*Math.PI*fh*t);
       }
+    }
+    // Hammer noise
+    for (let i = 0; i < Math.min(samples.length, Math.floor(0.012*sr)); i++) {
+      const t = i/sr;
+      samples[i] += 0.08 * (Math.random()-0.5) * Math.exp(-t*300);
     }
     return samples;
   }
@@ -3302,34 +3430,25 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   const newBtn = playStretchedBtn.cloneNode(true);
   playStretchedBtn.parentNode.replaceChild(newBtn, playStretchedBtn);
 
-  function makeOrigSamples() {
-    const sr = 44100;
-    const dur = 1;
-    const samples = new Float32Array(sr * dur);
-    for (let i = 0; i < samples.length; i++) {
-      const t = i / sr;
-      for (let h = 1; h <= 6; h++)
-        samples[i] += 0.08*(1/h)*Math.exp(-h*3*t)*Math.sin(2*Math.PI*220*h*t)*(1-Math.exp(-t*100));
-    }
-    return samples;
-  }
-
   newBtn.addEventListener('click', () => {
     const factor = parseFloat(stretchSlider.value);
     const sr = 44100;
     const f0 = 220;
-    // Analytical envelope stretch: resynthesise each harmonic with the original
-    // pitch but with the amplitude envelope sampled at t_env = t_out / factor.
-    // This guarantees perfect pitch preservation regardless of stretch factor.
-    const M = Math.floor(sr * factor);   // stretched duration in samples
+    const B = 0.0004;
+    // Envelope stretch: each partial keeps its pitch but envelope time is slowed
+    const M = Math.floor(sr * factor);
     const out = new Float32Array(M);
     for (let i = 0; i < M; i++) {
       const t    = i / sr;          // output time (determines pitch)
-      const tEnv = t / factor;      // input time (determines envelope shape)
-      for (let h = 1; h <= 6; h++) {
-        const env = Math.exp(-h * 3 * tEnv) * (1 - Math.exp(-tEnv * 100));
-        out[i] += 0.08 * (1 / h) * env * Math.sin(2 * Math.PI * f0 * h * t);
+      const tEnv = t / factor;      // input time (determines envelope)
+      for (let h = 1; h <= 12; h++) {
+        const fh = f0 * h * Math.sqrt(1 + B * h * h);
+        if (fh > sr / 2) break;
+        const decay = 1.5 + h * 0.8;
+        const env = Math.exp(-decay * tEnv) * (1 - Math.exp(-tEnv * 200));
+        out[i] += 0.06 * Math.pow(h, -1.1) * env * Math.sin(2 * Math.PI * fh * t);
       }
+      if (tEnv < 0.012) out[i] += 0.08 * (Math.random()-0.5) * Math.exp(-tEnv*300);
     }
     playBuffer(out, sr);
   });
@@ -3455,23 +3574,35 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   function playType(type) {
     const sr = 44100;
     const dur = 1.5;
-    const NaS = Math.floor(sr * dur);
-    const sig = makeSound(type, NaS, true);
-    const out = new Float32Array(NaS);
-    for (let i = 0; i < NaS; i++) out[i] = sig[i] * 0.6;
+    let out;
+    switch (type) {
+      case 'flute': out = synthFlute(220, dur, sr); break;
+      case 'bell':  out = synthBell(330, dur, sr); break;
+      case 'voice': out = synthVoice(180, dur, sr); break;
+      default: { const NaS = Math.floor(sr*dur); const s = makeSound(type,NaS,true); out = new Float32Array(NaS); for(let i=0;i<NaS;i++) out[i]=s[i]*0.6; }
+    }
     playBuffer(out, sr);
   }
 
   playABtn.addEventListener('click', () => playType(selA.value));
   playBBtn.addEventListener('click', () => playType(selB.value));
+  function makeAudioForType(type) {
+    const sr = 44100, dur = 1.5;
+    switch(type) {
+      case 'flute': return synthFlute(220, dur, sr);
+      case 'bell':  return synthBell(330, dur, sr);
+      case 'voice': return synthVoice(180, dur, sr);
+      default: { const N2=Math.floor(sr*dur); const s=makeSound(type,N2,true); const o=new Float32Array(N2); for(let i=0;i<N2;i++) o[i]=s[i]*0.6; return o; }
+    }
+  }
+
   playHybridBtn.addEventListener('click', () => {
     const blend = parseFloat(blendSlider.value);
     const sr = 44100;
     const dur = 1.5;
     const Na = Math.floor(sr * dur);
-    // Generate both sounds at audio rate (makeSound with Na samples + forAudio=true)
-    const audA = makeSound(selA.value, Na, true);
-    const audB = makeSound(selB.value, Na, true);
+    const audA = makeAudioForType(selA.value);
+    const audB = makeAudioForType(selB.value);
     // Cross-synthesis: apply A's amplitude envelope to B's waveform.
     // This gives B's pitch/timing but shaped by A's attack/sustain/decay.
     // Fast RMS envelope follower on A (~50ms time constant).
@@ -3712,40 +3843,28 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   // ── Audio playback ──
   function makeAudioClean(type) {
     const sr = 44100, dur = 2;
-    const Na = sr * dur;
-    const out = new Float32Array(Na);
     switch (type) {
-      case 'piano':
-        for (let i = 0; i < Na; i++) {
-          const t = i / sr;
-          for (let h = 1; h <= 8; h++)
-            out[i] += 0.06*(1/h)*Math.exp(-h*3*t)*Math.sin(2*Math.PI*220*h*t);
-        }
-        break;
+      case 'piano': return synthPiano(220, dur, sr);
       case 'vibrato': {
-        const f0 = 220, vD = 10, vR = 4;
-        for (let i = 0; i < Na; i++) {
-          const t = i / sr;
-          const phase = 2*Math.PI*f0*t - (vD/vR)*Math.cos(2*Math.PI*vR*t);
-          out[i] = 0.3 * Math.sin(phase) * Math.exp(-t);
-        }
-        break;
+        // Flute-like vibrato tone
+        return synthFlute(220, dur, sr);
       }
       case 'melody': {
-        const notes = [220,275,330,275,220];
-        let phase = 0;
-        for (let i = 0; i < Na; i++) {
-          const t = i / sr;
-          const tn = t / dur;
-          const ni = Math.min(Math.floor(tn * notes.length), notes.length - 1);
-          const nt = (tn * notes.length) % 1;
-          phase += 2 * Math.PI * notes[ni] / sr;
-          out[i] = 0.3 * Math.sin(phase) * Math.exp(-nt*3) * (1 - Math.exp(-nt*20));
+        // Five-note piano melody
+        const noteFreqs = [220, 275, 330, 275, 220];
+        const noteDur = dur / noteFreqs.length;
+        const Na = Math.floor(sr * dur);
+        const out = new Float32Array(Na);
+        for (let ni = 0; ni < noteFreqs.length; ni++) {
+          const note = synthPiano(noteFreqs[ni], noteDur, sr);
+          const offset = Math.floor(ni * noteDur * sr);
+          for (let k = 0; k < note.length && offset + k < Na; k++)
+            out[offset + k] += note[k];
         }
-        break;
+        return out;
       }
+      default: return new Float32Array(sr * dur);
     }
-    return out;
   }
 
   // Spectral gating denoiser for audio-rate signals (FFT-based)
