@@ -3734,43 +3734,63 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   playABtn.addEventListener('click', () => { const c=getAudioCtx(); if(c.state==='suspended') c.resume(); playBuffer(makeAudioForType(selA.value), crossSr); });
   playBBtn.addEventListener('click', () => { const c=getAudioCtx(); if(c.state==='suspended') c.resume(); playBuffer(makeAudioForType(selB.value), crossSr); });
 
-  // ── STFT-based spectral cross-synthesis ──
-  // Process in short overlapping blocks: |FFT(A)| × phase(FFT(B)) per block
+  // ── STFT-based spectral cross-synthesis (overlap-add) ──
+  // Per-frame: |FFT(A)| × phase(FFT(B)) → IFFT, then overlap-add
   playHybridBtn.addEventListener('click', () => {
     try {
       const blend = parseFloat(blendSlider.value);
-      const audA = makeAudioForType(selA.value);
-      const audB = makeAudioForType(selB.value);
-      const Na = Math.max(audA.length, audB.length);
+      const sigA = makeAudioForType(selA.value);
+      const sigB = makeAudioForType(selB.value);
+      const Na = Math.max(sigA.length, sigB.length);
+      const fftSize = 2048;
+      const hop = fftSize / 4;
+      const numFrames = Math.max(1, Math.floor((Na - fftSize) / hop) + 1);
 
-      // Pad to next power of 2 (required by our radix-2 FFT)
-      let M = 1; while (M < Na) M <<= 1;
-      const reA = new Float32Array(M);
-      const imA = new Float32Array(M);
-      const reB = new Float32Array(M);
-      const imB = new Float32Array(M);
-      for (let i = 0; i < audA.length; i++) reA[i] = audA[i];
-      for (let i = 0; i < audB.length; i++) reB[i] = audB[i];
+      const win = new Float32Array(fftSize);
+      for (let n = 0; n < fftSize; n++) win[n] = 0.5 - 0.5 * Math.cos(2 * Math.PI * n / fftSize);
 
-      fft(reA, imA, false);
-      fft(reB, imB, false);
+      const out = new Float32Array(Na);
+      const wsq = new Float32Array(Na);
 
-      // Cross-synthesis: magnitude from A (blended with B), phase from B
-      for (let k = 0; k < M; k++) {
-        const magA = Math.sqrt(reA[k]*reA[k] + imA[k]*imA[k]);
-        const magB = Math.sqrt(reB[k]*reB[k] + imB[k]*imB[k]);
-        const mag = magA * blend + magB * (1 - blend);
-        const phB = Math.atan2(imB[k], reB[k]);
-        reA[k] = mag * Math.cos(phB);
-        imA[k] = mag * Math.sin(phB);
+      for (let f = 0; f < numFrames; f++) {
+        const off = f * hop;
+        // Window both signals and forward FFT
+        const rA = new Float32Array(fftSize), iA = new Float32Array(fftSize);
+        const rB = new Float32Array(fftSize), iB = new Float32Array(fftSize);
+        for (let n = 0; n < fftSize; n++) {
+          const idx = off + n;
+          rA[n] = (idx < sigA.length ? sigA[idx] : 0) * win[n];
+          rB[n] = (idx < sigB.length ? sigB[idx] : 0) * win[n];
+        }
+        fft(rA, iA, false);
+        fft(rB, iB, false);
+
+        // Cross-synthesis into NEW arrays (do not reuse rA/iA)
+        const rH = new Float32Array(fftSize), iH = new Float32Array(fftSize);
+        for (let k = 0; k < fftSize; k++) {
+          const mA = Math.sqrt(rA[k] * rA[k] + iA[k] * iA[k]);
+          const mB = Math.sqrt(rB[k] * rB[k] + iB[k] * iB[k]);
+          const mag = mA * blend + mB * (1 - blend);
+          const ph = Math.atan2(iB[k], rB[k]);
+          rH[k] = mag * Math.cos(ph);
+          iH[k] = mag * Math.sin(ph);
+        }
+        fft(rH, iH, true); // IFFT
+
+        // Overlap-add with synthesis window
+        for (let n = 0; n < fftSize; n++) {
+          const idx = off + n;
+          if (idx < Na) {
+            out[idx] += rH[n] * win[n];
+            wsq[idx] += win[n] * win[n];
+          }
+        }
       }
 
-      fft(reA, imA, true); // IFFT
-
-      // Extract and normalize
-      const out = new Float32Array(Na);
+      // Normalize by window overlap sum, then peak-normalize
+      for (let i = 0; i < Na; i++) if (wsq[i] > 1e-8) out[i] /= wsq[i];
       let mx = 0;
-      for (let i = 0; i < Na; i++) { out[i] = reA[i]; if (Math.abs(out[i]) > mx) mx = Math.abs(out[i]); }
+      for (let i = 0; i < Na; i++) if (Math.abs(out[i]) > mx) mx = Math.abs(out[i]);
       if (mx > 0) for (let i = 0; i < Na; i++) out[i] = out[i] / mx * 0.4;
 
       playBuffer(out, crossSr);
