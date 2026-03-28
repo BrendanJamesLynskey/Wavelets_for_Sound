@@ -61,25 +61,6 @@ The Marseille group's ongoing influence, from PRISM laboratory to modern signal 
 
 ---
 
-## Deploy to GitHub Pages
-
-This is a single-file project — `index.html` contains everything.
-
-```bash
-git init Wavelets_for_Sound && cd Wavelets_for_Sound
-# copy index.html and README.md into this directory
-git add .
-git commit -m "Initial commit"
-git remote add origin git@github.com:BrendanJamesLynskey/Wavelets_for_Sound.git
-git push -u origin main
-```
-
-Then go to **Settings → Pages → Source → Deploy from a branch → `main` / `/ (root)`**.
-
-Your guide will be live at `https://brendanjameslynskey.github.io/Wavelets_for_Sound/`.
-
----
-
 ## Key References
 
 1. Grossmann, A. & Morlet, J. (1984). *Decomposition of Hardy Functions into Square Integrable Wavelets of Constant Shape.* SIAM J. Math. Anal. 15, 723–736.
