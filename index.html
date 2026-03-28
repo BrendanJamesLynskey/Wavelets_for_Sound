@@ -3416,25 +3416,43 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   playCleanBtn.addEventListener('click', () => playBuffer(makeAudioSig(sigSelect.value, false, 0, true), 44100));
   playNoisyBtn.addEventListener('click', () => playBuffer(makeAudioSig(sigSelect.value, true, 0, true), 44100));
   playDenoisedBtn.addEventListener('click', () => {
-    const threshold = parseFloat(threshSlider.value);
+    const threshFrac = parseFloat(threshSlider.value); // 0–1 slider
     const noiseLevel = parseFloat(noiseLvl.value);
     const type = sigSelect.value;
-    // Compute time-varying CWT gain envelope in normalised domain (N=256).
+    const sr = 44100;
+
+    // CWT of noisy normalised signal
     const clean = makeCleanSig(type);
     const noisy = addNoise(clean, noiseLevel);
     const cwtN = computeCWTComplex(noisy, scales, omega0);
+
+    // Estimate noise sigma from finest-scale coefficients via MAD estimator
+    // (finest scale = si=0, smallest a → dominated by broadband noise)
+    const fineMags = new Float32Array(N);
+    for (let b = 0; b < N; b++)
+      fineMags[b] = Math.sqrt(cwtN[0].re[b] ** 2 + cwtN[0].im[b] ** 2);
+    const sorted = Float32Array.from(fineMags).sort();
+    const medianMag = sorted[Math.floor(N / 2)];
+    const estSigma = medianMag / 0.6745; // MAD → Gaussian sigma
+
+    // Adaptive threshold: σ√(2 log N), scaled by slider (0 = none, 1 = optimal)
+    const autoThresh = estSigma * Math.sqrt(2 * Math.log(N));
+    const effThresh = threshFrac * autoThresh;
+
+    // Wiener-style gain: spectral power before vs after soft-thresholding
     const gainEnv = new Float32Array(N);
     for (let b = 0; b < N; b++) {
-      let sumBefore = 0, sumAfter = 0;
+      let pwBefore = 0, pwAfter = 0;
       for (let si = 0; si < S; si++) {
         const mag = Math.sqrt(cwtN[si].re[b] ** 2 + cwtN[si].im[b] ** 2);
-        sumBefore += mag;
-        sumAfter += Math.max(0, mag - threshold);
+        pwBefore += mag * mag;
+        const thMag = Math.max(0, mag - effThresh);
+        pwAfter += thMag * thMag;
       }
-      gainEnv[b] = sumBefore > 0 ? sumAfter / sumBefore : 0;
+      gainEnv[b] = pwBefore > 0 ? Math.sqrt(pwAfter / pwBefore) : 0;
     }
-    // Apply gain envelope to audio-rate noisy signal.
-    const sr = 44100;
+
+    // Apply envelope to audio-rate noisy signal
     const audioNoisy = makeAudioSig(type, true, 0, true);
     const out = new Float32Array(audioNoisy.length);
     for (let i = 0; i < audioNoisy.length; i++) {
