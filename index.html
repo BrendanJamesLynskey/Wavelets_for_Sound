@@ -959,26 +959,28 @@ details[open] summary::before{transform:rotate(90deg)}
   <div class="viz">
     <canvas id="crossSynth" height="300"></canvas>
     <div class="controls">
-      <label>Sound A
+      <label>Magnitude from
         <select id="crossSynthA">
-          <option value="flute">Flute-like (slow attack, rich harmonics)</option>
-          <option value="bell">Bell-like (sharp attack, fast decay)</option>
-          <option value="voice">Voice-like (formants)</option>
+          <option value="speech">Speech (vowel sequence)</option>
+          <option value="flute">Flute (sustained tone)</option>
+          <option value="bell">Bell (inharmonic ring)</option>
+          <option value="chord">Organ chord (rich spectrum)</option>
         </select>
       </label>
-      <label>Sound B
+      <label>Phase from
         <select id="crossSynthB">
-          <option value="bell">Bell-like (sharp attack, fast decay)</option>
-          <option value="flute">Flute-like (slow attack, rich harmonics)</option>
-          <option value="voice">Voice-like (formants)</option>
+          <option value="arpeggio">Piano arpeggio (pitched rhythm)</option>
+          <option value="bell">Bell (sharp attack)</option>
+          <option value="flute">Flute (sustained tone)</option>
+          <option value="speech">Speech (vowel sequence)</option>
         </select>
       </label>
       <label>Blend <input type="range" id="crossBlend" min="0" max="1" value="1" step="0.05"> <span id="crossBlendVal">100% A-mag</span></label>
-      <button id="playCrossA">♪ Sound A</button>
-      <button id="playCrossB">♪ Sound B</button>
-      <button id="playCrossHybrid">♪ Hybrid</button>
+      <button id="playCrossA">♪ Magnitude source</button>
+      <button id="playCrossB">♪ Phase source</button>
+      <button id="playCrossHybrid">♪ Cross-synthesis</button>
     </div>
-    <div class="viz-caption">Top row: Sound A scalogram (magnitude) · Bottom row: Sound B scalogram · Middle: hybrid |W_A| × phase(W_B) — blend slider morphs between A and B magnitudes</div>
+    <div class="viz-caption">Top: magnitude source scalogram · Middle: hybrid |W_A| × phase(W_B) · Bottom: phase source scalogram — the hybrid inherits the timbre of A and the pitch/rhythm of B</div>
   </div>
 </section>
 
@@ -3478,31 +3480,79 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   const scales = [];
   for (let i = 0; i < S; i++) scales.push(2 + i * 1.8);
 
-  function makeSound(type, N, forAudio) {
+  // Visualization signals (low-res, for scalogram display)
+  function makeVizSig(type) {
     const sig = new Float32Array(N);
-    for (let i = 0; i < N; i++) {
-      const t = i / N;
-      switch (type) {
-        case 'flute':
+    switch (type) {
+      case 'speech': {
+        // Vowel sequence with formant transitions (viz-domain)
+        const vowels = [
+          { f0: 5, formants: [1,3,5], dur: 0.3 },
+          { f0: 6, formants: [2,4,6], dur: 0.3 },
+          { f0: 5, formants: [1,2,5], dur: 0.4 }
+        ];
+        let phase = 0, tOff = 0;
+        for (let i = 0; i < N; i++) {
+          const t = i / N;
+          let vi = 0; let accDur = 0;
+          for (let v = 0; v < vowels.length; v++) { accDur += vowels[v].dur; if (t < accDur) { vi = v; break; } }
+          const vow = vowels[vi];
+          const localT = t - (vi === 0 ? 0 : vowels.slice(0,vi).reduce((s,v)=>s+v.dur,0));
+          const env = Math.min(1, localT/0.03) * (1 - Math.exp(-localT*30));
+          phase += 2*Math.PI*vow.f0/N;
+          for (const fh of vow.formants)
+            sig[i] += env * (1/fh) * Math.sin(phase * fh) * Math.exp(-localT*2);
+        }
+        break;
+      }
+      case 'flute': {
+        let phase = 0;
+        for (let i = 0; i < N; i++) {
+          const t = i / N;
+          phase += 2*Math.PI*8/N;
+          const env = Math.pow(Math.min(t/0.12,1),2) * Math.exp(-0.5*t);
           for (let h = 1; h <= 6; h++)
-            sig[i] += (1/h) * Math.pow(Math.min(t/0.12, 1), 2) * Math.exp(-h*0.5*t) * Math.sin(2*Math.PI*(forAudio?220:8)*h*t);
-          break;
-        case 'bell':
-          for (let h = 1; h <= 8; h++) {
-            const decay = h * (forAudio?4:3);
-            sig[i] += (1/h) * Math.exp(-decay*t) * (1-Math.exp(-t*80)) * Math.sin(2*Math.PI*(forAudio?330:9)*h*t + h*0.3);
-          }
-          break;
-        case 'voice':
-          // Voiced with formants
-          [1,2,3,5,7].forEach((h,j) => {
-            const amp = [1, 0.5, 0.8, 0.3, 0.2][j];
-            sig[i] += amp * Math.exp(-h*1.5*t) * Math.sin(2*Math.PI*(forAudio?180:6)*h*t);
-          });
-          break;
+            sig[i] += (1/h) * env * Math.exp(-h*0.3*t) * Math.sin(phase*h);
+        }
+        break;
+      }
+      case 'bell': {
+        const ratios = [1, 2.09, 3.0, 4.16, 5.43];
+        for (let i = 0; i < N; i++) {
+          const t = i / N;
+          for (let h = 0; h < ratios.length; h++)
+            sig[i] += (1/(h+1)) * Math.exp(-(h+1)*3*t) * (1-Math.exp(-t*80)) * Math.sin(2*Math.PI*7*ratios[h]*t);
+        }
+        break;
+      }
+      case 'chord': {
+        // Rich organ chord (C-E-G-C')
+        const freqs = [6, 7.5, 9, 12];
+        for (let i = 0; i < N; i++) {
+          const t = i / N;
+          const env = Math.min(1, t/0.05) * Math.exp(-0.3*t);
+          for (const f of freqs)
+            for (let h = 1; h <= 4; h++)
+              sig[i] += env * (0.3/h) * Math.sin(2*Math.PI*f*h*t);
+        }
+        break;
+      }
+      case 'arpeggio': {
+        // Rapid note sequence
+        const notes = [8, 10, 12, 15, 12, 10, 8, 10];
+        let phase = 0;
+        for (let i = 0; i < N; i++) {
+          const t = i / N;
+          const ni = Math.min(Math.floor(t * notes.length), notes.length-1);
+          const nt = (t * notes.length) % 1;
+          phase += 2*Math.PI*notes[ni]/N;
+          const env = (1-Math.exp(-nt*40)) * Math.exp(-nt*6);
+          for (let h = 1; h <= 4; h++)
+            sig[i] += env * (1/h) * Math.sin(phase*h);
+        }
+        break;
       }
     }
-    // Normalize
     let mx = 0;
     sig.forEach(v => { if (Math.abs(v) > mx) mx = Math.abs(v); });
     if (mx > 0) for (let j = 0; j < N; j++) sig[j] /= mx;
@@ -3510,8 +3560,7 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   }
 
   function getCWT(type) {
-    const sig = makeSound(type, N, false);
-    return computeCWTComplex(sig, scales, omega0);
+    return computeCWTComplex(makeVizSig(type), scales, omega0);
   }
 
   function drawScalogram(ctx, cwtData, x0, y0, w, h, tint) {
@@ -3544,7 +3593,7 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     const cwtA = getCWT(selA.value);
     const cwtB = getCWT(selB.value);
 
-    // Row 1: Sound A magnitude
+    // Row 1: magnitude source
     drawScalogram(ctx, cwtA, 0, 0, W, rowH - 2, [74, 157, 232]);
     // Row 2: Hybrid
     const hybridCwt = cwtA.map((row, si) => {
@@ -3561,14 +3610,14 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
       return { re, im };
     });
     drawScalogram(ctx, hybridCwt, 0, rowH + 2, W, rowH - 2, [232, 164, 74]);
-    // Row 3: Sound B
+    // Row 3: phase source
     drawScalogram(ctx, cwtB, 0, 2*rowH + 4, W, rowH - 2, [92, 232, 154]);
 
     ctx.fillStyle = '#8a8d9a';
     ctx.font = '10px monospace';
-    ctx.fillText(`Sound A: ${selA.value} (magnitude)`, 5, 11);
-    ctx.fillText(`Hybrid: |W_A|×${blend.toFixed(2)} + |W_B|×${(1-blend).toFixed(2)}, phase from B`, 5, rowH + 13);
-    ctx.fillText(`Sound B: ${selB.value} (phase source)`, 5, 2*rowH + 15);
+    ctx.fillText(`Magnitude: ${selA.value}`, 5, 11);
+    ctx.fillText(`Cross-synthesis: |W_A|×${blend.toFixed(2)} + |W_B|×${(1-blend).toFixed(2)}, phase(W_B)`, 5, rowH + 13);
+    ctx.fillText(`Phase: ${selB.value}`, 5, 2*rowH + 15);
   }
 
   draw();
@@ -3577,58 +3626,171 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   blendSlider.addEventListener('input', draw);
   window.addEventListener('resize', draw);
 
-  function playType(type) {
-    const sr = 44100;
-    const dur = 1.5;
-    let out;
-    switch (type) {
-      case 'flute': out = synthFlute(220, dur, sr); break;
-      case 'bell':  out = synthBell(330, dur, sr); break;
-      case 'voice': out = synthVoice(180, dur, sr); break;
-      default: { const NaS = Math.floor(sr*dur); const s = makeSound(type,NaS,true); out = new Float32Array(NaS); for(let i=0;i<NaS;i++) out[i]=s[i]*0.6; }
+  // ── Audio: realistic source sounds (2.5s, more interesting) ──
+  const crossDur = 2.5;
+  const crossSr = 44100;
+
+  function synthSpeechAudio() {
+    // Vowel sequence "ah-ee-oh" with transitions
+    const sr = crossSr, dur = crossDur;
+    const Na = Math.floor(sr * dur);
+    // Three vowel segments with different formant structures
+    const vowels = [
+      { f0: 150, F: [800,1200,2500], start: 0, end: 0.8 },   // "ah"
+      { f0: 170, F: [270,2300,3000], start: 0.85, end: 1.7 },  // "ee"
+      { f0: 140, F: [500,900,2300],  start: 1.75, end: 2.5 }   // "oh"
+    ];
+    const out = new Float32Array(Na);
+    for (const vow of vowels) {
+      const seg = synthVoice(vow.f0, vow.end - vow.start, sr);
+      // Re-filter with this vowel's specific formants
+      const filtered = new Float32Array(seg.length);
+      for (const fFreq of vow.F) {
+        const w0 = 2*Math.PI*fFreq/sr;
+        const bw = fFreq * 0.12;
+        const alpha = Math.sin(w0) / (2 * fFreq / bw);
+        const b0 = alpha, a1 = -2*Math.cos(w0), a2 = 1-alpha;
+        const norm = 1 + alpha;
+        let x1=0,x2=0,y1=0,y2=0;
+        for (let i = 0; i < seg.length; i++) {
+          const x0 = seg[i];
+          const y0 = (b0*x0 - b0*x2 - a1*y1 - a2*y2) / norm;
+          filtered[i] += y0;
+          x2=x1; x1=x0; y2=y1; y1=y0;
+        }
+      }
+      const offset = Math.floor(vow.start * sr);
+      for (let i = 0; i < filtered.length && offset+i < Na; i++)
+        out[offset+i] += filtered[i];
     }
-    playBuffer(out, sr);
+    // Normalize
+    let mx = 0;
+    for (let i = 0; i < Na; i++) if (Math.abs(out[i]) > mx) mx = Math.abs(out[i]);
+    if (mx > 0) for (let i = 0; i < Na; i++) out[i] = out[i] / mx * 0.35;
+    return out;
   }
 
-  playABtn.addEventListener('click', () => playType(selA.value));
-  playBBtn.addEventListener('click', () => playType(selB.value));
+  function synthArpeggioAudio() {
+    // Piano arpeggio: C4-E4-G4-C5-G4-E4-C4 (rapid, each ~0.35s)
+    const sr = crossSr;
+    const notes = [262, 330, 392, 523, 392, 330, 262];
+    const noteDur = crossDur / notes.length;
+    const Na = Math.floor(sr * crossDur);
+    const out = new Float32Array(Na);
+    for (let ni = 0; ni < notes.length; ni++) {
+      const seg = synthPiano(notes[ni], noteDur + 0.3, sr);
+      const offset = Math.floor(ni * noteDur * sr);
+      for (let i = 0; i < seg.length && offset+i < Na; i++)
+        out[offset+i] += seg[i];
+    }
+    return out;
+  }
+
+  function synthChordAudio() {
+    // Rich organ chord C3-E3-G3-C4 sustained
+    const sr = crossSr, dur = crossDur;
+    const Na = Math.floor(sr * dur);
+    const out = new Float32Array(Na);
+    const freqs = [131, 165, 196, 262];
+    for (const f0 of freqs) {
+      for (let h = 1; h <= 8; h++) {
+        const fh = f0 * h;
+        if (fh > sr/2) break;
+        for (let i = 0; i < Na; i++) {
+          const t = i / sr;
+          const env = Math.min(1, t/0.05) * Math.exp(-0.3*t) * (0.6 + 0.4*Math.exp(-t));
+          out[i] += 0.012 * (1/h) * env * Math.sin(2*Math.PI*fh*t);
+        }
+      }
+    }
+    return out;
+  }
+
   function makeAudioForType(type) {
-    const sr = 44100, dur = 1.5;
+    const sr = crossSr, dur = crossDur;
     switch(type) {
-      case 'flute': return synthFlute(220, dur, sr);
-      case 'bell':  return synthBell(330, dur, sr);
-      case 'voice': return synthVoice(180, dur, sr);
-      default: { const N2=Math.floor(sr*dur); const s=makeSound(type,N2,true); const o=new Float32Array(N2); for(let i=0;i<N2;i++) o[i]=s[i]*0.6; return o; }
+      case 'speech':   return synthSpeechAudio();
+      case 'flute':    return synthFlute(330, dur, sr);
+      case 'bell':     return synthBell(440, dur, sr);
+      case 'chord':    return synthChordAudio();
+      case 'arpeggio': return synthArpeggioAudio();
+      default:         return new Float32Array(Math.floor(sr*dur));
     }
   }
 
+  playABtn.addEventListener('click', () => playBuffer(makeAudioForType(selA.value), crossSr));
+  playBBtn.addEventListener('click', () => playBuffer(makeAudioForType(selB.value), crossSr));
+
+  // ── Proper STFT-based spectral cross-synthesis ──
+  // |STFT(A)| × exp(i·phase(STFT(B))) → ISTFT
   playHybridBtn.addEventListener('click', () => {
     const blend = parseFloat(blendSlider.value);
-    const sr = 44100;
-    const dur = 1.5;
-    const Na = Math.floor(sr * dur);
+    const sr = crossSr;
     const audA = makeAudioForType(selA.value);
     const audB = makeAudioForType(selB.value);
-    // Cross-synthesis: apply A's amplitude envelope to B's waveform.
-    // This gives B's pitch/timing but shaped by A's attack/sustain/decay.
-    // Fast RMS envelope follower on A (~50ms time constant).
-    const alpha = 1 - Math.exp(-1 / (sr * 0.05));
-    const envA = new Float32Array(Na);
-    let runA = 0;
-    for (let i = 0; i < Na; i++) {
-      runA += alpha * (audA[i] * audA[i] - runA);
-      envA[i] = Math.sqrt(Math.max(0, runA));
-    }
-    let maxE = 0;
-    for (let i = 0; i < Na; i++) if (envA[i] > maxE) maxE = envA[i];
-    if (maxE > 0) for (let i = 0; i < Na; i++) envA[i] /= maxE;
-    // blend=1: B's waveform shaped by A's envelope (cross-synthesis)
-    // blend=0: pure B unchanged
+    const Na = Math.max(audA.length, audB.length);
+
+    // Pad both to same length
+    const padA = new Float32Array(Na);
+    const padB = new Float32Array(Na);
+    padA.set(audA); padB.set(audB);
+
+    const fftSize = 2048;
+    const hop = fftSize / 4;
+    const numFrames = Math.max(1, Math.floor((Na - fftSize) / hop) + 1);
     const out = new Float32Array(Na);
-    for (let i = 0; i < Na; i++) {
-      const crossB = audB[i] * envA[i];
-      out[i] = (crossB * blend + audB[i] * (1 - blend)) * 0.6;
+    const winSum = new Float32Array(Na);
+
+    const win = new Float32Array(fftSize);
+    for (let n = 0; n < fftSize; n++) win[n] = 0.5 - 0.5*Math.cos(2*Math.PI*n/fftSize);
+
+    for (let f = 0; f < numFrames; f++) {
+      const offset = f * hop;
+
+      // FFT of A
+      const reA = new Float32Array(fftSize);
+      const imA = new Float32Array(fftSize);
+      for (let n = 0; n < fftSize; n++)
+        reA[n] = (offset+n < Na ? padA[offset+n] : 0) * win[n];
+      fft(reA, imA, false);
+
+      // FFT of B
+      const reB = new Float32Array(fftSize);
+      const imB = new Float32Array(fftSize);
+      for (let n = 0; n < fftSize; n++)
+        reB[n] = (offset+n < Na ? padB[offset+n] : 0) * win[n];
+      fft(reB, imB, false);
+
+      // Cross-synthesis: magnitude from A (blended), phase from B
+      const reH = new Float32Array(fftSize);
+      const imH = new Float32Array(fftSize);
+      for (let k = 0; k < fftSize; k++) {
+        const magA = Math.sqrt(reA[k]*reA[k] + imA[k]*imA[k]);
+        const magB = Math.sqrt(reB[k]*reB[k] + imB[k]*imB[k]);
+        const mag = magA * blend + magB * (1 - blend);
+        const phB = Math.atan2(imB[k], reB[k]);
+        reH[k] = mag * Math.cos(phB);
+        imH[k] = mag * Math.sin(phB);
+      }
+
+      // IFFT
+      fft(reH, imH, true);
+
+      // Overlap-add
+      for (let n = 0; n < fftSize; n++) {
+        if (offset+n < Na) {
+          out[offset+n] += reH[n] * win[n];
+          winSum[offset+n] += win[n]*win[n];
+        }
+      }
     }
+    for (let i = 0; i < Na; i++) if (winSum[i] > 1e-8) out[i] /= winSum[i];
+
+    // Normalize output
+    let mx = 0;
+    for (let i = 0; i < Na; i++) if (Math.abs(out[i]) > mx) mx = Math.abs(out[i]);
+    if (mx > 0) for (let i = 0; i < Na; i++) out[i] = out[i] / mx * 0.4;
+
     playBuffer(out, sr);
   });
 })();
