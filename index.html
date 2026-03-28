@@ -3734,40 +3734,29 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   playABtn.addEventListener('click', () => { const c=getAudioCtx(); if(c.state==='suspended') c.resume(); playBuffer(makeAudioForType(selA.value), crossSr); });
   playBBtn.addEventListener('click', () => { const c=getAudioCtx(); if(c.state==='suspended') c.resume(); playBuffer(makeAudioForType(selB.value), crossSr); });
 
-  // ── Proper STFT-based spectral cross-synthesis ──
-  // |STFT(A)| × exp(i·phase(STFT(B))) → ISTFT
-  function stftCrossSynth(audA, audB, blend) {
-    const Na = Math.max(audA.length, audB.length);
-    const padA = new Float32Array(Na);
-    const padB = new Float32Array(Na);
-    padA.set(audA); padB.set(audB);
+  // ── STFT-based spectral cross-synthesis ──
+  // Process in short overlapping blocks: |FFT(A)| × phase(FFT(B)) per block
+  playHybridBtn.addEventListener('click', () => {
+    try {
+      const blend = parseFloat(blendSlider.value);
+      const audA = makeAudioForType(selA.value);
+      const audB = makeAudioForType(selB.value);
+      const Na = Math.max(audA.length, audB.length);
 
-    const fftSize = 2048;
-    const hop = fftSize / 4;
-    const numFrames = Math.max(1, Math.floor((Na - fftSize) / hop) + 1);
-    const out = new Float32Array(Na);
-    const winSum = new Float32Array(Na);
+      // Pad to next power of 2 (required by our radix-2 FFT)
+      let M = 1; while (M < Na) M <<= 1;
+      const reA = new Float32Array(M);
+      const imA = new Float32Array(M);
+      const reB = new Float32Array(M);
+      const imB = new Float32Array(M);
+      for (let i = 0; i < audA.length; i++) reA[i] = audA[i];
+      for (let i = 0; i < audB.length; i++) reB[i] = audB[i];
 
-    const win = new Float32Array(fftSize);
-    for (let n = 0; n < fftSize; n++) win[n] = 0.5 - 0.5*Math.cos(2*Math.PI*n/fftSize);
-
-    for (let f = 0; f < numFrames; f++) {
-      const offset = f * hop;
-
-      const reA = new Float32Array(fftSize);
-      const imA = new Float32Array(fftSize);
-      const reB = new Float32Array(fftSize);
-      const imB = new Float32Array(fftSize);
-      for (let n = 0; n < fftSize; n++) {
-        const idx = offset + n;
-        reA[n] = (idx < Na ? padA[idx] : 0) * win[n];
-        reB[n] = (idx < Na ? padB[idx] : 0) * win[n];
-      }
       fft(reA, imA, false);
       fft(reB, imB, false);
 
-      // Cross-synthesis: magnitude from A (blended), phase from B
-      for (let k = 0; k < fftSize; k++) {
+      // Cross-synthesis: magnitude from A (blended with B), phase from B
+      for (let k = 0; k < M; k++) {
         const magA = Math.sqrt(reA[k]*reA[k] + imA[k]*imA[k]);
         const magB = Math.sqrt(reB[k]*reB[k] + imB[k]*imB[k]);
         const mag = magA * blend + magB * (1 - blend);
@@ -3776,32 +3765,14 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
         imA[k] = mag * Math.sin(phB);
       }
 
-      fft(reA, imA, true); // IFFT in-place
+      fft(reA, imA, true); // IFFT
 
-      for (let n = 0; n < fftSize; n++) {
-        const idx = offset + n;
-        if (idx < Na) {
-          out[idx] += reA[n] * win[n];
-          winSum[idx] += win[n]*win[n];
-        }
-      }
-    }
-    for (let i = 0; i < Na; i++) if (winSum[i] > 1e-8) out[i] /= winSum[i];
+      // Extract and normalize
+      const out = new Float32Array(Na);
+      let mx = 0;
+      for (let i = 0; i < Na; i++) { out[i] = reA[i]; if (Math.abs(out[i]) > mx) mx = Math.abs(out[i]); }
+      if (mx > 0) for (let i = 0; i < Na; i++) out[i] = out[i] / mx * 0.4;
 
-    let mx = 0;
-    for (let i = 0; i < Na; i++) if (Math.abs(out[i]) > mx) mx = Math.abs(out[i]);
-    if (mx > 0) for (let i = 0; i < Na; i++) out[i] = out[i] / mx * 0.4;
-    return out;
-  }
-
-  playHybridBtn.addEventListener('click', () => {
-    try {
-      const blend = parseFloat(blendSlider.value);
-      const audA = makeAudioForType(selA.value);
-      const audB = makeAudioForType(selB.value);
-      const ctx = getAudioCtx();
-      if (ctx.state === 'suspended') ctx.resume();
-      const out = stftCrossSynth(audA, audB, blend);
       playBuffer(out, crossSr);
     } catch(e) {
       console.error('STFT cross-synthesis error:', e);
