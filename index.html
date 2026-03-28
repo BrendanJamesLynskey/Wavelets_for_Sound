@@ -1801,18 +1801,30 @@ function computeCWT(signal, scales, omega0, N) {
     rateVal.textContent = rate.toFixed(1) + ' Hz';
     depthVal.textContent = depth + ' Hz';
 
-    // Generate vibrato signal
+    // Generate vibrato signal using phase accumulation (correct FM synthesis)
+    // Instantaneous freq f(t) = f0 + depth*sin(2*pi*rate*t)
+    // Phase = integral of 2*pi*f(t) = 2*pi*f0*t - (depth/rate)*cos(2*pi*rate*t)
     const sig = new Float32Array(N);
-    const centreFreq = 20; // in signal-domain units
+    const centreFreq = 20; // signal-domain carrier frequency
+    const depthSig = depth / 10; // scale depth slider to signal-domain units
     for (let i = 0; i < N; i++) {
       const t = i / N;
-      const f = centreFreq + (depth / 10) * Math.sin(2 * Math.PI * rate * t);
-      sig[i] = Math.sin(2 * Math.PI * f * t) * Math.exp(-t);
+      const phase = 2 * Math.PI * centreFreq * t
+                   - (depthSig / (rate || 0.01)) * Math.cos(2 * Math.PI * rate * t);
+      sig[i] = Math.sin(phase) * (Math.exp(-t * 0.8) * (1 - Math.exp(-t * 30)));
     }
 
-    // CWT
+    // CWT — focus scale range on the frequency band of interest
+    // Scale a maps to freq f ≈ omega0*N/(2*pi*a), so for centreFreq=20:
+    // a_centre = omega0*N/(2*pi*centreFreq) ≈ 12.2
+    // Range scales to cover ±generous margin around the vibrato band
     const scales = [];
-    for (let i = 0; i < numScales; i++) scales.push(1.5 + i * 1.2);
+    const aCentre = omega0 * N / (2 * Math.PI * centreFreq);
+    const aMin = Math.max(1.5, aCentre * 0.3);
+    const aMax = aCentre * 3;
+    for (let i = 0; i < numScales; i++) {
+      scales.push(aMin + (aMax - aMin) * i / (numScales - 1));
+    }
     const cwt = computeCWT(sig, scales, omega0, N);
 
     let maxC = 0;
@@ -1821,35 +1833,94 @@ function computeCWT(signal, scales, omega0, N) {
     ctx.fillStyle = '#0a0b0f';
     ctx.fillRect(0, 0, W, H);
 
+    const waveH = 60;
+    const plotY = waveH + 4;
+    const plotH = H - plotY;
+
+    // Draw waveform at top
+    let maxSig = 0;
+    sig.forEach(v => { if (Math.abs(v) > maxSig) maxSig = Math.abs(v); });
+    ctx.strokeStyle = '#4a9de8';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const x = (i / N) * W;
+      const y = waveH / 2 + (sig[i] / (maxSig || 1)) * waveH * 0.4;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
     // Draw scalogram
     const cellW = W / N;
-    const cellH = H / numScales;
+    const cellH = plotH / numScales;
     for (let si = 0; si < numScales; si++) {
       for (let b = 0; b < N; b++) {
         const v = cwt[si][b] / (maxC || 1);
         ctx.fillStyle = magmaColor(Math.pow(v, 0.6));
-        ctx.fillRect(b * cellW, si * cellH, cellW + 1, cellH + 1);
+        ctx.fillRect(b * cellW, plotY + si * cellH, cellW + 1, cellH + 1);
       }
     }
 
-    // Extract and draw ridge
+    // Draw expected instantaneous frequency curve (ground truth)
+    ctx.strokeStyle = 'rgba(232,164,74,0.5)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    for (let b = 0; b < N; b++) {
+      const t = b / N;
+      const fInst = centreFreq + depthSig * Math.sin(2 * Math.PI * rate * t);
+      const aInst = omega0 * N / (2 * Math.PI * fInst);
+      const si = (aInst - aMin) / (aMax - aMin) * numScales;
+      const x = (b + 0.5) * cellW;
+      const y = plotY + (si + 0.5) * cellH;
+      if (b === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Extract and draw ridge (smoothed: constrain jumps to ±2 scale indices)
+    const ridge = new Int32Array(N);
+    // First pass: find global max for first column
+    let prevSi = 0;
+    let maxVal = 0;
+    for (let si = 0; si < numScales; si++) {
+      if (cwt[si][0] > maxVal) { maxVal = cwt[si][0]; prevSi = si; }
+    }
+    ridge[0] = prevSi;
+    // Subsequent columns: search within ±3 of previous
+    const maxJump = 3;
+    for (let b = 1; b < N; b++) {
+      let bestSi = prevSi, bestVal = 0;
+      const lo = Math.max(0, prevSi - maxJump);
+      const hi = Math.min(numScales - 1, prevSi + maxJump);
+      for (let si = lo; si <= hi; si++) {
+        if (cwt[si][b] > bestVal) { bestVal = cwt[si][b]; bestSi = si; }
+      }
+      ridge[b] = bestSi;
+      prevSi = bestSi;
+    }
+
     ctx.strokeStyle = 'rgba(255,255,255,0.9)';
     ctx.lineWidth = 2;
     ctx.beginPath();
     for (let b = 0; b < N; b++) {
-      let maxVal = 0, maxSi = 0;
-      for (let si = 0; si < numScales; si++) {
-        if (cwt[si][b] > maxVal) { maxVal = cwt[si][b]; maxSi = si; }
-      }
       const x = (b + 0.5) * cellW;
-      const y = (maxSi + 0.5) * cellH;
+      const y = plotY + (ridge[b] + 0.5) * cellH;
       if (b === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     ctx.stroke();
 
+    // Axis labels
+    ctx.fillStyle = '#8a8d9a';
+    ctx.font = '10px monospace';
+    const fHigh = omega0 * N / (2 * Math.PI * aMin);
+    const fLow = omega0 * N / (2 * Math.PI * aMax);
+    ctx.fillText(`High freq (≈${fHigh.toFixed(0)})`, 5, plotY + 12);
+    ctx.fillText(`Low freq (≈${fLow.toFixed(0)})`, 5, H - 5);
+
     ctx.fillStyle = '#e8a44a';
     ctx.font = '10px monospace';
-    ctx.fillText('Ridge = instantaneous frequency estimate', 10, H - 8);
+    ctx.fillText('White = extracted ridge · Gold dashed = true instantaneous freq', 10, plotY + plotH - 8);
   }
 
   draw();
@@ -1862,10 +1933,14 @@ function computeCWT(signal, scales, omega0, N) {
     const dur = 2;
     const rate = parseFloat(rateSlider.value);
     const depth = parseFloat(depthSlider.value);
+    const f0 = 440;
+    // Correct phase accumulation for audio vibrato
     const samples = new Float32Array(sr * dur);
     for (let i = 0; i < samples.length; i++) {
       const t = i / sr;
-      samples[i] = 0.3 * Math.sin(2*Math.PI*(440+depth*Math.sin(2*Math.PI*rate*t))*t) * Math.exp(-t*0.5);
+      const phase = 2 * Math.PI * f0 * t
+                   - (depth / (rate || 0.01)) * Math.cos(2 * Math.PI * rate * t);
+      samples[i] = 0.3 * Math.sin(phase) * Math.exp(-t * 0.5);
     }
     playBuffer(samples, sr);
   });
