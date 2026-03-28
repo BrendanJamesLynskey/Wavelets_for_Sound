@@ -908,6 +908,16 @@ details[open] summary::before{transform:rotate(90deg)}
     while keeping the time axis unchanged, the pitch is transposed without altering duration.
   </p>
 
+  <div class="viz">
+    <canvas id="pitchShift" height="250"></canvas>
+    <div class="controls">
+      <label>Semitones <input type="range" id="pitchSemitones" min="-12" max="12" value="0" step="1"> <span id="pitchSemitonesVal">0 st</span></label>
+      <button id="playOrigPitch">♪ Original</button>
+      <button id="playPitchShifted">♪ Shifted</button>
+    </div>
+    <div class="viz-caption">Wavelet-domain pitch shifting — duration is preserved while pitch changes by the selected interval</div>
+  </div>
+
   <h3>Time-varying filtering</h3>
   <p>
     Zeroing out wavelet coefficients at selected scales effectively removes those frequency
@@ -1352,6 +1362,14 @@ function computeCWT(signal, scales, omega0, N) {
     ctx.moveTo(hw + 10, plotY);
     ctx.lineTo(hw + 10, H);
     ctx.stroke();
+
+    // Frequency axis labels
+    ctx.fillStyle = '#8a8d9a';
+    ctx.font = '9px monospace';
+    ctx.fillText('High', 2, plotY + 10);
+    ctx.fillText('Low', 2, H - 4);
+    ctx.fillText('High', hw + 12, plotY + 10);
+    ctx.fillText('Low', hw + 12, H - 4);
   }
 
   draw();
@@ -1615,8 +1633,8 @@ function computeCWT(signal, scales, omega0, N) {
     // Labels
     ctx.fillStyle = '#8a8d9a';
     ctx.font = '10px monospace';
-    ctx.fillText('Low freq (large scale) →', 5, plotY + 12);
-    ctx.fillText('High freq (small scale)', 5, plotY + plotH - 5);
+    ctx.fillText('High freq (small scale)', 5, plotY + 12);
+    ctx.fillText('Low freq (large scale)', 5, plotY + plotH - 5);
   }
 
   function startBuild() {
@@ -2104,11 +2122,12 @@ function computeCWT(signal, scales, omega0, N) {
 
     const rowH = H / 2 - 5;
 
-    // Original
+    // Original (multi-harmonic to match audio)
     const sig = new Float32Array(N);
     for (let i = 0; i < N; i++) {
       const t = i / N;
-      sig[i] = Math.sin(2 * Math.PI * 8 * t) * Math.exp(-t * 3) * (1 - Math.exp(-t * 20));
+      for (let h = 1; h <= 6; h++)
+        sig[i] += (1/h) * Math.exp(-h * 3 * t) * Math.sin(2 * Math.PI * 8 * h * t) * (1 - Math.exp(-t * 20));
     }
 
     let maxS = 0;
@@ -2124,17 +2143,17 @@ function computeCWT(signal, scales, omega0, N) {
     }
     ctx.stroke();
 
-    // Stretched
+    // Stretched (pitch-preserving): same oscillation frequencies, stretched envelope
     const stretchedN = Math.floor(N * factor);
     const stretched = new Float32Array(stretchedN);
     for (let i = 0; i < stretchedN; i++) {
-      const origIdx = i / factor;
-      const idx0 = Math.floor(origIdx);
-      const frac = origIdx - idx0;
-      const v0 = idx0 < N ? sig[idx0] : 0;
-      const v1 = idx0 + 1 < N ? sig[idx0 + 1] : 0;
-      stretched[i] = v0 + frac * (v1 - v0);
+      const t = i / stretchedN;           // output position (normalized)
+      const tEnv = t / factor;            // slowed envelope time
+      for (let h = 1; h <= 6; h++)
+        stretched[i] += (1/h) * Math.exp(-h * 3 * tEnv) * Math.sin(2 * Math.PI * 8 * h * t) * (1 - Math.exp(-tEnv * 20));
     }
+    let maxSh = 0;
+    stretched.forEach(v => { if (Math.abs(v) > maxSh) maxSh = Math.abs(v); });
 
     const botY = rowH + 10;
     ctx.strokeStyle = '#5ce89a';
@@ -2142,7 +2161,7 @@ function computeCWT(signal, scales, omega0, N) {
     ctx.beginPath();
     for (let i = 0; i < stretchedN; i++) {
       const x = (i / stretchedN) * W;
-      const y = botY + rowH / 2 + (stretched[i] / maxS) * rowH * 0.4;
+      const y = botY + rowH / 2 + (stretched[i] / (maxSh || maxS)) * rowH * 0.4;
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     ctx.stroke();
@@ -2195,6 +2214,131 @@ function computeCWT(signal, scales, omega0, N) {
       stretched[i] = v0 + frac*(v1-v0);
     }
     playBuffer(stretched, sr);
+  });
+})();
+
+// ── CHAPTER 7: Pitch Shifting ──────────────────────────────────
+(function pitchShiftViz() {
+  const canvas = document.getElementById('pitchShift');
+  if (!canvas) return;
+
+  const semiSlider = document.getElementById('pitchSemitones');
+  const semiVal = document.getElementById('pitchSemitonesVal');
+  const playOrigBtn = document.getElementById('playOrigPitch');
+  const playShiftedBtn = document.getElementById('playPitchShifted');
+
+  const N = 200;
+
+  function draw() {
+    const W = canvas.parentElement.getBoundingClientRect().width;
+    const H = 250;
+    const ctx = fitCanvas(canvas);
+
+    const semitones = parseInt(semiSlider.value);
+    semiVal.textContent = semitones + ' st';
+
+    ctx.fillStyle = '#0a0b0f';
+    ctx.fillRect(0, 0, W, H);
+
+    const rowH = H / 2 - 5;
+    const f0 = 8;
+    const ratio = Math.pow(2, semitones / 12);
+
+    // Original signal
+    const sig = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const t = i / N;
+      sig[i] = Math.sin(2 * Math.PI * f0 * t) * Math.exp(-t * 3) * (1 - Math.exp(-t * 20));
+      for (let h = 2; h <= 4; h++)
+        sig[i] += (1/h) * Math.sin(2 * Math.PI * f0 * h * t) * Math.exp(-h * 2 * t);
+    }
+
+    // Pitch-shifted: same duration, different frequency
+    const shifted = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const t = i / N;
+      shifted[i] = Math.sin(2 * Math.PI * f0 * ratio * t) * Math.exp(-t * 3) * (1 - Math.exp(-t * 20));
+      for (let h = 2; h <= 4; h++)
+        shifted[i] += (1/h) * Math.sin(2 * Math.PI * f0 * ratio * h * t) * Math.exp(-h * 2 * t);
+    }
+
+    let maxS = 0;
+    sig.forEach(v => { if (Math.abs(v) > maxS) maxS = Math.abs(v); });
+    let maxSh = 0;
+    shifted.forEach(v => { if (Math.abs(v) > maxSh) maxSh = Math.abs(v); });
+
+    // Draw original
+    ctx.strokeStyle = '#4a9de8';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const x = (i / N) * W;
+      const y = rowH / 2 + (sig[i] / maxS) * rowH * 0.4;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Draw shifted
+    const botY = rowH + 10;
+    ctx.strokeStyle = '#b06ae8';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) {
+      const x = (i / N) * W;
+      const y = botY + rowH / 2 + (shifted[i] / (maxSh || 1)) * rowH * 0.4;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Duration bars (same length — duration preserved)
+    const durW = W * 0.8;
+    ctx.fillStyle = 'rgba(74,157,232,0.3)';
+    ctx.fillRect(W * 0.1, rowH - 5, durW, 3);
+    ctx.fillStyle = 'rgba(176,106,232,0.3)';
+    ctx.fillRect(W * 0.1, botY + rowH - 5, durW, 3);
+
+    // Labels
+    ctx.fillStyle = '#8a8d9a';
+    ctx.font = '10px monospace';
+    ctx.fillText('Original', 5, 12);
+    const note = semitones > 0 ? `+${semitones} semitones` : semitones < 0 ? `${semitones} semitones` : 'unison';
+    ctx.fillText(`Pitch-shifted (${note}, ×${ratio.toFixed(3)})`, 5, botY + 12);
+  }
+
+  draw();
+  semiSlider.addEventListener('input', draw);
+  window.addEventListener('resize', draw);
+
+  function makeOrigSound() {
+    const sr = 44100;
+    const dur = 1;
+    const samples = new Float32Array(sr * dur);
+    for (let i = 0; i < samples.length; i++) {
+      const t = i / sr;
+      for (let h = 1; h <= 6; h++)
+        samples[i] += 0.08*(1/h)*Math.exp(-h*3*t)*Math.sin(2*Math.PI*220*h*t)*(1-Math.exp(-t*100));
+    }
+    return samples;
+  }
+
+  playOrigBtn.addEventListener('click', () => playBuffer(makeOrigSound(), 44100));
+  playShiftedBtn.addEventListener('click', () => {
+    const semitones = parseInt(semiSlider.value);
+    const ratio = Math.pow(2, semitones / 12);
+    const sr = 44100;
+    const dur = 1;
+    const f0 = 220;
+    // Wavelet-style pitch shift: keep the envelope (duration) the same,
+    // but resynthesise each harmonic at the shifted frequency.
+    const samples = new Float32Array(sr * dur);
+    for (let i = 0; i < samples.length; i++) {
+      const t = i / sr;
+      for (let h = 1; h <= 6; h++) {
+        const env = Math.exp(-h * 3 * t) * (1 - Math.exp(-t * 100));
+        samples[i] += 0.08 * (1/h) * env * Math.sin(2 * Math.PI * f0 * ratio * h * t);
+      }
+    }
+    playBuffer(samples, sr);
   });
 })();
 
@@ -2496,7 +2640,7 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
 
     // Waveform
     let maxS = 0;
-    sig.forEach(v => { if (Math.abs(v) > maxS) maxS = v; });
+    sig.forEach(v => { if (Math.abs(v) > maxS) maxS = Math.abs(v); });
     ctx.strokeStyle = '#4a9de8';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -3247,11 +3391,13 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   // Attach: re-draw overlay after scalogram animation completes
   canvas.addEventListener('scalogramBuilt', () => pianoOverlay());
   checkbox.addEventListener('change', () => {
-    if (checkbox.checked) pianoOverlay();
-    else {
-      // Trigger a rebuild to clear
-      const sigSelect = document.getElementById('scalogramSignal');
-      if (sigSelect) sigSelect.dispatchEvent(new Event('change'));
+    if (checkbox.checked) {
+      pianoOverlay();
+    } else {
+      // Redraw the scalogram frame without overlay (trigger the build IIFE's drawFrame)
+      // We dispatch a custom redraw event rather than destroying cwtData via sigSelect change
+      const buildBtn = document.getElementById('buildScalogram');
+      if (buildBtn) buildBtn.click();
     }
   });
 })();
@@ -3380,7 +3526,9 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   }
 
   draw();
-  [sigSelect, noiseLvl, threshSlider].forEach(el => el.addEventListener('input', draw));
+  [noiseLvl, threshSlider].forEach(el => el.addEventListener('input', draw));
+  sigSelect.addEventListener('change', draw);
+  sigSelect.addEventListener('input', draw);
   window.addEventListener('resize', draw);
 
   function makeAudioSig(type, noisy_, threshold_, forAudio) {
