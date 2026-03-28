@@ -2978,26 +2978,35 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   newBtn.addEventListener('click', () => {
     const factor = parseFloat(stretchSlider.value);
     const orig = makeOrigSamples();
-    // Downsample to N=512 for CWT processing
-    const N = 512;
-    const ds = new Float32Array(N);
-    const step = orig.length / N;
-    for (let i = 0; i < N; i++) ds[i] = orig[Math.floor(i * step)];
-
-    const stretched = waveletTimeStretchAudio(ds, factor, 5);
-    // Upsample to audio rate
+    const sr = 44100;
+    const f0 = 220;
+    // OLA time stretch: for a harmonic signal, overlapping grains shifted by
+    // exactly one period aligns phases perfectly — no pitch change.
+    const period = Math.round(sr / f0);     // 200 samples @ 220 Hz
+    const grainSize = 4 * period;           // 800 samples
+    const synthHop = period;                // advance one period per grain in output
+    const anaHop = Math.max(1, Math.round(period / factor)); // input advance
     const M = Math.floor(orig.length * factor);
     const out = new Float32Array(M);
-    const srcLen = stretched.length;
-    for (let i = 0; i < M; i++) {
-      const idx = (i / M) * srcLen;
-      const i0 = Math.floor(idx);
-      const frac = idx - i0;
-      const v0 = i0 < srcLen ? stretched[i0] : 0;
-      const v1 = i0+1 < srcLen ? stretched[i0+1] : 0;
-      out[i] = (v0 + frac*(v1-v0)) * 0.7;
+    const norm = new Float32Array(M);
+    // Hann window
+    const win = new Float32Array(grainSize);
+    for (let i = 0; i < grainSize; i++)
+      win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / grainSize);
+    let anaPos = 0, synPos = 0;
+    while (synPos + grainSize <= M) {
+      for (let i = 0; i < grainSize; i++) {
+        const idx = anaPos + i;
+        const s = idx < orig.length ? orig[idx] : 0;
+        out[synPos + i] += s * win[i];
+        norm[synPos + i] += win[i];
+      }
+      anaPos = Math.round(anaPos + anaHop);
+      synPos += synthHop;
     }
-    playBuffer(out, 44100);
+    for (let i = 0; i < M; i++)
+      if (norm[i] > 0.01) out[i] = out[i] / norm[i] * 0.7;
+    playBuffer(out, sr);
   });
 })();
 
