@@ -3131,37 +3131,31 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   playBBtn.addEventListener('click', () => playType(selB.value));
   playHybridBtn.addEventListener('click', () => {
     const blend = parseFloat(blendSlider.value);
-    // Do CWT-domain cross-synthesis on short buffer
-    const Ns = 512;
-    const sigA = makeSound(selA.value, Ns, false);
-    const sigB = makeSound(selB.value, Ns, false);
-    const cA = computeCWTComplex(sigA, scales, omega0);
-    const cB = computeCWTComplex(sigB, scales, omega0);
-    const hybCwt = cA.map((row, si) => {
-      const re = new Float32Array(Ns);
-      const im = new Float32Array(Ns);
-      for (let b = 0; b < Ns; b++) {
-        const magA = Math.sqrt(row.re[b]**2 + row.im[b]**2);
-        const magB = Math.sqrt(cB[si].re[b]**2 + cB[si].im[b]**2);
-        const mag = magA * blend + magB * (1 - blend);
-        const phB = Math.atan2(cB[si].im[b], cB[si].re[b]);
-        re[b] = mag * Math.cos(phB);
-        im[b] = mag * Math.sin(phB);
-      }
-      return { re, im };
-    });
-    const rec = reconstructCWT(hybCwt, scales);
-    // Upsample to 44100
     const sr = 44100;
     const dur = 1.5;
-    const out = new Float32Array(Math.floor(sr * dur));
-    for (let i = 0; i < out.length; i++) {
-      const idx = (i / out.length) * Ns;
-      const i0 = Math.floor(idx);
-      const frac = idx - i0;
-      const v0 = i0 < Ns ? rec[i0] : 0;
-      const v1 = i0+1 < Ns ? rec[i0+1] : 0;
-      out[i] = (v0 + frac*(v1-v0)) * 0.6;
+    const Na = Math.floor(sr * dur);
+    // Generate both sounds at audio rate (makeSound with Na samples + forAudio=true)
+    const audA = makeSound(selA.value, Na, true);
+    const audB = makeSound(selB.value, Na, true);
+    // Cross-synthesis: apply A's amplitude envelope to B's waveform.
+    // This gives B's pitch/timing but shaped by A's attack/sustain/decay.
+    // Fast RMS envelope follower on A (~50ms time constant).
+    const alpha = 1 - Math.exp(-1 / (sr * 0.05));
+    const envA = new Float32Array(Na);
+    let runA = 0;
+    for (let i = 0; i < Na; i++) {
+      runA += alpha * (audA[i] * audA[i] - runA);
+      envA[i] = Math.sqrt(Math.max(0, runA));
+    }
+    let maxE = 0;
+    for (let i = 0; i < Na; i++) if (envA[i] > maxE) maxE = envA[i];
+    if (maxE > 0) for (let i = 0; i < Na; i++) envA[i] /= maxE;
+    // blend=1: B's waveform shaped by A's envelope (cross-synthesis)
+    // blend=0: pure B unchanged
+    const out = new Float32Array(Na);
+    for (let i = 0; i < Na; i++) {
+      const crossB = audB[i] * envA[i];
+      out[i] = (crossB * blend + audB[i] * (1 - blend)) * 0.6;
     }
     playBuffer(out, sr);
   });
@@ -3413,20 +3407,30 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   playNoisyBtn.addEventListener('click', () => playBuffer(makeAudioSig(sigSelect.value, true, 0, true), 44100));
   playDenoisedBtn.addEventListener('click', () => {
     const threshold = parseFloat(threshSlider.value);
-    const clean = makeCleanSig(sigSelect.value);
-    const noisy = addNoise(clean, parseFloat(noiseLvl.value));
-    const den = denoise(noisy, threshold);
-    // Upsample to audio rate
-    const sr = 44100; const dur = 2;
-    const Na = Math.floor(sr * dur);
-    const out = new Float32Array(Na);
-    for (let i = 0; i < Na; i++) {
-      const idx = (i / Na) * N;
-      const i0 = Math.floor(idx);
-      const frac = idx - i0;
-      const v0 = i0 < N ? den[i0] : 0;
-      const v1 = i0+1 < N ? den[i0+1] : 0;
-      out[i] = (v0 + frac*(v1-v0)) * 0.6;
+    const noiseLevel = parseFloat(noiseLvl.value);
+    const type = sigSelect.value;
+    // Compute time-varying CWT gain envelope in normalised domain (N=256).
+    const clean = makeCleanSig(type);
+    const noisy = addNoise(clean, noiseLevel);
+    const cwtN = computeCWTComplex(noisy, scales, omega0);
+    const gainEnv = new Float32Array(N);
+    for (let b = 0; b < N; b++) {
+      let sumBefore = 0, sumAfter = 0;
+      for (let si = 0; si < S; si++) {
+        const mag = Math.sqrt(cwtN[si].re[b] ** 2 + cwtN[si].im[b] ** 2);
+        sumBefore += mag;
+        sumAfter += Math.max(0, mag - threshold);
+      }
+      gainEnv[b] = sumBefore > 0 ? sumAfter / sumBefore : 0;
+    }
+    // Apply gain envelope to audio-rate noisy signal.
+    const sr = 44100;
+    const audioNoisy = makeAudioSig(type, true, 0, true);
+    const out = new Float32Array(audioNoisy.length);
+    for (let i = 0; i < audioNoisy.length; i++) {
+      const t = i / audioNoisy.length;
+      const g = gainEnv[Math.min(Math.floor(t * N), N - 1)];
+      out[i] = audioNoisy[i] * g;
     }
     playBuffer(out, sr);
   });
