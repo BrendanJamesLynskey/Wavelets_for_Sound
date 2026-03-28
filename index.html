@@ -751,7 +751,7 @@ details[open] summary::before{transform:rotate(90deg)}
       <button id="playScalogramSound">♪ Listen</button>
       <label><input type="checkbox" id="showPianoRoll"> Piano roll overlay</label>
     </div>
-    <div class="viz-caption">Top: signal waveform · Bottom: CWT scalogram (scale vs time, colour = |W(a,b)|) · Enable piano roll overlay for two-notes signal</div>
+    <div class="viz-caption">Top: signal waveform · Bottom: CWT scalogram (scale vs time, colour = |W(a,b)|) · Piano roll overlay shows expected note/harmonic positions</div>
   </div>
 
   <h3>What Kronland-Martinet saw</h3>
@@ -1537,6 +1537,7 @@ function computeCWT(signal, scales, omega0, N) {
   const sigSelect = document.getElementById('scalogramSignal');
   const buildBtn = document.getElementById('buildScalogram');
   const playBtn = document.getElementById('playScalogramSound');
+  const pianoRollCheck = document.getElementById('showPianoRoll');
 
   const N = 256;
   const numScales = 40;
@@ -1635,6 +1636,65 @@ function computeCWT(signal, scales, omega0, N) {
     ctx.font = '10px monospace';
     ctx.fillText('High freq (small scale)', 5, plotY + 12);
     ctx.fillText('Low freq (large scale)', 5, plotY + plotH - 5);
+
+    // Piano roll overlay
+    if (pianoRollCheck && pianoRollCheck.checked && cwtData && animRow >= numScales) {
+      const cellW = W / N;
+      const cellH = plotH / numScales;
+      // Map signal-domain frequency f to scale index: a = omega0*N/(2*pi*f), si = (a-2)/1.5
+      function freqToSi(f) { return (omega0 * N / (2 * Math.PI * f) - 2) / 1.5; }
+      const type = sigSelect.value;
+
+      // Define note regions per signal type: [{label, freq, t0, t1, color}]
+      let notes = [];
+      switch (type) {
+        case 'two_notes':
+          notes = [
+            { label: 'Note A (f=10)', freq: 10, t0: 0, t1: 0.5, color: [74,157,232] },
+            { label: 'Note B (f=15)', freq: 15, t0: 0.5, t1: 1, color: [92,232,154] }
+          ];
+          break;
+        case 'piano':
+          for (let h = 1; h <= 4; h++) {
+            const hue = [74,157,232];
+            notes.push({ label: `Harmonic ${h} (f=${8*h})`, freq: 8*h, t0: 0, t1: 1,
+              color: h===1?[74,157,232]:h===2?[92,232,154]:h===3?[232,164,74]:[176,106,232] });
+          }
+          break;
+        case 'vibrato':
+          notes = [
+            { label: 'Vibrato centre (f≈15)', freq: 15, t0: 0, t1: 1, color: [232,164,74] }
+          ];
+          break;
+        case 'attack':
+          notes = [
+            { label: 'Tone (f=12)', freq: 12, t0: 0.05, t1: 1, color: [74,157,232] }
+          ];
+          break;
+        case 'chirp':
+          notes = [
+            { label: 'Sweep start (f≈5)', freq: 5, t0: 0, t1: 0.3, color: [74,157,232] },
+            { label: 'Sweep end (f≈35)', freq: 35, t0: 0.7, t1: 1, color: [92,232,154] }
+          ];
+          break;
+      }
+
+      notes.forEach(n => {
+        const si = freqToSi(n.freq);
+        const y = plotY + si * cellH;
+        const noteH = cellH * 2.5;
+        const x0 = n.t0 * W;
+        const x1 = n.t1 * W;
+        ctx.fillStyle = `rgba(${n.color[0]},${n.color[1]},${n.color[2]},0.2)`;
+        ctx.strokeStyle = `rgba(${n.color[0]},${n.color[1]},${n.color[2]},0.8)`;
+        ctx.lineWidth = 1.5;
+        ctx.fillRect(x0, y - noteH/2, x1 - x0, noteH);
+        ctx.strokeRect(x0, y - noteH/2, x1 - x0, noteH);
+        ctx.fillStyle = `rgb(${n.color[0]},${n.color[1]},${n.color[2]})`;
+        ctx.font = '10px monospace';
+        ctx.fillText(n.label, x0 + 4, y + 3);
+      });
+    }
   }
 
   function startBuild() {
@@ -1674,6 +1734,7 @@ function computeCWT(signal, scales, omega0, N) {
 
   drawFrame();
   buildBtn.addEventListener('click', startBuild);
+  if (pianoRollCheck) pianoRollCheck.addEventListener('change', drawFrame);
   sigSelect.addEventListener('change', () => {
     currentSig = makeSignal(sigSelect.value);
     cwtData = null;
@@ -3322,85 +3383,7 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   });
 })();
 
-// ── CHAPTER 4: Piano Roll overlay (patch scalogramBuild) ───────
-(function pianoRollPatch() {
-  const canvas = document.getElementById('scalogramBuilder');
-  const checkbox = document.getElementById('showPianoRoll');
-  if (!canvas || !checkbox) return;
-
-  // We listen for checkbox change and trigger a custom event to tell
-  // the scalogramBuild IIFE to redraw
-  // Instead, we draw the piano roll overlay directly on top after build
-  const pianoOverlay = function() {
-    if (!checkbox.checked) return;
-    const sigSelect = document.getElementById('scalogramSignal');
-    if (!sigSelect || sigSelect.value !== 'two_notes') return;
-
-    const W = canvas.parentElement.getBoundingClientRect().width;
-    const H = 400;
-    const ctx = canvas.getContext('2d');
-    ctx.save();
-    // Note: fitCanvas already applied DPR scale; do NOT scale again here
-
-    // scalogramBuild draws row si at y = plotY + si * cellH (si=0 at top = highest freq)
-    // Scale array: a = 2 + si*1.5. CWT peak at a = omega0*N/(2pi*f) = 5*256/(2pi*f)
-    // Note A (f=10): a≈20.4 → si = (20.4-2)/1.5 ≈ 12
-    // Note B (f=15): a≈13.6 → si = (13.6-2)/1.5 ≈ 8
-    const numScales = 40;
-    const waveH = 80;
-    const plotY = waveH + 5;
-    const plotH = H - plotY;
-    const cellH = plotH / numScales;
-
-    const note1ScaleY = plotY + 12 * cellH;   // Note A (f=10) at si≈12
-    const note2ScaleY = plotY + 8 * cellH;    // Note B (f=15) at si≈8
-    const noteH = cellH * 3;
-
-    // Note 1 box (0 to W/2)
-    ctx.fillStyle = 'rgba(74,157,232,0.25)';
-    ctx.strokeStyle = 'rgba(74,157,232,0.8)';
-    ctx.lineWidth = 1.5;
-    ctx.fillRect(0, note1ScaleY - noteH/2, W/2, noteH);
-    ctx.strokeRect(0, note1ScaleY - noteH/2, W/2, noteH);
-    ctx.fillStyle = '#4a9de8';
-    ctx.font = '10px monospace';
-    ctx.fillText('Note A (330 Hz)', 4, note1ScaleY + 3);
-
-    // Note 2 box (W/2 to W)
-    ctx.fillStyle = 'rgba(92,232,154,0.25)';
-    ctx.strokeStyle = 'rgba(92,232,154,0.8)';
-    ctx.lineWidth = 1.5;
-    ctx.fillRect(W/2, note2ScaleY - noteH/2, W/2, noteH);
-    ctx.strokeRect(W/2, note2ScaleY - noteH/2, W/2, noteH);
-    ctx.fillStyle = '#5ce89a';
-    ctx.font = '10px monospace';
-    ctx.fillText('Note B (440 Hz)', W/2 + 4, note2ScaleY + 3);
-
-    // Vertical divider
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-    ctx.setLineDash([4,4]);
-    ctx.beginPath();
-    ctx.moveTo(W/2, plotY);
-    ctx.lineTo(W/2, H);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.restore();
-  };
-
-  // Attach: re-draw overlay after scalogram animation completes
-  canvas.addEventListener('scalogramBuilt', () => pianoOverlay());
-  checkbox.addEventListener('change', () => {
-    if (checkbox.checked) {
-      pianoOverlay();
-    } else {
-      // Redraw the scalogram frame without overlay (trigger the build IIFE's drawFrame)
-      // We dispatch a custom redraw event rather than destroying cwtData via sigSelect change
-      const buildBtn = document.getElementById('buildScalogram');
-      if (buildBtn) buildBtn.click();
-    }
-  });
-})();
+// Piano roll overlay is now integrated into scalogramBuild's drawFrame()
 
 // ── CHAPTER 7b: Wavelet Denoising ──────────────────────────────
 (function denoising() {
