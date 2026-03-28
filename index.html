@@ -3757,11 +3757,9 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
       for (let n = 0; n < fftSize; n++) win[n] = 0.5 - 0.5 * Math.cos(2 * Math.PI * n / fftSize);
 
       const out = new Float32Array(Na);
-      const wsq = new Float32Array(Na);
 
       for (let f = 0; f < numFrames; f++) {
         const off = f * hop;
-        // Window both signals and forward FFT
         const rA = new Float32Array(fftSize), iA = new Float32Array(fftSize);
         const rB = new Float32Array(fftSize), iB = new Float32Array(fftSize);
         for (let n = 0; n < fftSize; n++) {
@@ -3772,7 +3770,6 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
         fft(rA, iA, false);
         fft(rB, iB, false);
 
-        // Cross-synthesis into NEW arrays (do not reuse rA/iA)
         const rH = new Float32Array(fftSize), iH = new Float32Array(fftSize);
         for (let k = 0; k < fftSize; k++) {
           const mA = Math.sqrt(rA[k] * rA[k] + iA[k] * iA[k]);
@@ -3782,20 +3779,18 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
           rH[k] = mag * Math.cos(ph);
           iH[k] = mag * Math.sin(ph);
         }
-        fft(rH, iH, true); // IFFT
+        fft(rH, iH, true);
 
         // Overlap-add with synthesis window
         for (let n = 0; n < fftSize; n++) {
           const idx = off + n;
-          if (idx < Na) {
-            out[idx] += rH[n] * win[n];
-            wsq[idx] += win[n] * win[n];
-          }
+          if (idx < Na) out[idx] += rH[n] * win[n];
         }
       }
 
-      // Normalize by window overlap sum, then peak-normalize
-      for (let i = 0; i < Na; i++) if (wsq[i] > 1e-8) out[i] /= wsq[i];
+      // Hann + 75% overlap sums to constant 1.5 in steady state.
+      // Using constant divisor avoids edge spikes that poison peak normalization.
+      for (let i = 0; i < Na; i++) out[i] /= 1.5;
       let mx = 0;
       for (let i = 0; i < Na; i++) if (Math.abs(out[i]) > mx) mx = Math.abs(out[i]);
       if (mx > 0) for (let i = 0; i < Na; i++) out[i] = out[i] / mx * 0.4;
