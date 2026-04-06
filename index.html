@@ -338,6 +338,12 @@ details[open] summary::before{transform:rotate(90deg)}
 .expandable summary:hover{color:var(--fg)}
 .expandable .inner{padding:1.2em 1.4em;background:rgba(176,106,232,.04)}
 
+/* DISPLAY MODE TOGGLE (magnitude/phase) */
+.display-toggle{display:inline-flex;border:1px solid var(--border);border-radius:3px;overflow:hidden;margin-left:.5em;font-size:.75rem;font-family:'Lucida Console',Monaco,monospace}
+.display-toggle button{padding:.25em .6em;background:var(--bg3);color:var(--fg-dim);border:none;cursor:pointer;transition:background .15s,color .15s}
+.display-toggle button.active{background:var(--accent);color:#fff}
+.display-toggle button:hover:not(.active){color:var(--fg)}
+
 /* WAVELET TABS */
 .wtabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:0}
 .wtab{
@@ -543,6 +549,7 @@ details[open] summary::before{transform:rotate(90deg)}
         </select>
       </label>
       <button id="playChirp">▶ Listen</button>
+      <span class="display-toggle" data-target="cwtStftMode"><button class="active" data-mode="magnitude">Magnitude</button><button data-mode="phase">Phase</button></span>
     </div>
     <div class="viz-caption">Left: STFT spectrogram · Right: CWT scalogram (Morlet wavelet) · Drag chirp speed to compare</div>
   </div>
@@ -557,6 +564,7 @@ details[open] summary::before{transform:rotate(90deg)}
     <canvas id="waveletProbe" height="280"></canvas>
     <div class="controls">
       <label>Scale <input type="range" id="probeScale" min="0" max="39" value="15" step="1"> <span id="probeScaleVal">scale 15</span></label>
+      <span class="display-toggle" data-target="probeMode"><button class="active" data-mode="magnitude">Magnitude</button><button data-mode="phase">Phase</button></span>
     </div>
     <div class="viz-caption">Top: signal with wavelet overlaid at cursor position · Bottom: scalogram with active cell highlighted — drag horizontally to move, use slider or vertical drag to change scale</div>
   </div>
@@ -754,8 +762,9 @@ details[open] summary::before{transform:rotate(90deg)}
       <button id="buildScalogram">▶ Build</button>
       <button id="playScalogramSound">♪ Listen</button>
       <label><input type="checkbox" id="showPianoRoll"> Piano roll overlay</label>
+      <span class="display-toggle" data-target="scalogramMode"><button class="active" data-mode="magnitude">Magnitude</button><button data-mode="phase">Phase</button></span>
     </div>
-    <div class="viz-caption">Top: signal waveform · Bottom: CWT scalogram (scale vs time, colour = |W(a,b)|) · Piano roll overlay shows expected note/harmonic positions</div>
+    <div class="viz-caption">Top: signal waveform · Bottom: CWT scalogram (scale vs time, colour = |W(a,b)| or ∠W(a,b)) · Piano roll overlay shows expected note/harmonic positions</div>
   </div>
 
   <h3>What Kronland-Martinet saw</h3>
@@ -787,6 +796,7 @@ details[open] summary::before{transform:rotate(90deg)}
       <label>Vibrato rate <input type="range" id="vibratoRate" min="2" max="12" value="5" step="0.5"> <span id="vibratoRateVal">5.0 Hz</span></label>
       <label>Vibrato depth <input type="range" id="vibratoDepth" min="0" max="80" value="30"> <span id="vibratoDepthVal">30 Hz</span></label>
       <button id="playVibrato">▶ Listen</button>
+      <span class="display-toggle" data-target="ridgeMode"><button class="active" data-mode="magnitude">Magnitude</button><button data-mode="phase">Phase</button></span>
     </div>
     <div class="viz-caption">Scalogram with extracted ridge (white line) tracking instantaneous frequency of a vibrato tone</div>
   </div>
@@ -864,6 +874,7 @@ details[open] summary::before{transform:rotate(90deg)}
       </label>
       <button id="buildTransient">▶ Analyse</button>
       <button id="playTransient">♪ Listen</button>
+      <span class="display-toggle" data-target="transientMode"><button class="active" data-mode="magnitude">Magnitude</button><button data-mode="phase">Phase</button></span>
     </div>
     <div class="viz-caption">Transients appear as vertical streaks across all scales — their precise timing is revealed</div>
   </div>
@@ -944,6 +955,7 @@ details[open] summary::before{transform:rotate(90deg)}
       <label>Cutoff <input type="range" id="filterCutoff" min="5" max="35" value="20"> <span id="filterCutoffVal">20</span></label>
       <button id="playUnfiltered">♪ Original</button>
       <button id="playFiltered">♪ Filtered</button>
+      <span class="display-toggle" data-target="filterMode"><button class="active" data-mode="magnitude">Magnitude</button><button data-mode="phase">Phase</button></span>
     </div>
     <div class="viz-caption">Top: original scalogram · Bottom: time-varying filtered scalogram — filter fades in between the dashed markers (attack preserved, sustain filtered)</div>
   </div>
@@ -1116,6 +1128,20 @@ function fitCanvas(canvas) {
   return setupCanvas(canvas, w, h);
 }
 
+// Display mode state (magnitude vs phase) per visualization
+const displayMode = {};
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.display-toggle button');
+  if (!btn) return;
+  const toggle = btn.closest('.display-toggle');
+  const key = toggle.dataset.target;
+  toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  displayMode[key] = btn.dataset.mode;
+  // Trigger redraw by dispatching a resize (all visualizations listen for it)
+  window.dispatchEvent(new Event('resize'));
+});
+
 // Color maps
 function heatColor(v) {
   v = Math.max(0, Math.min(1, v));
@@ -1132,6 +1158,58 @@ function magmaColor(v) {
   const g = Math.floor(255 * Math.max(0, v * v * 1.2));
   const b = Math.floor(255 * Math.min(1, 0.15 + v * 0.6 + Math.max(0, (0.5 - v) * 1.5)));
   return `rgb(${r},${g},${b})`;
+}
+
+// Cyclic phase colormap: maps angle in [-π, π] to HSV wheel at full saturation,
+// with brightness modulated by magnitude (so near-zero regions stay dark).
+function phaseColor(angle, mag) {
+  const hue = ((angle + Math.PI) / (2 * Math.PI)) * 360; // 0–360
+  const brightness = Math.max(0, Math.min(1, mag));
+  // HSV to RGB with S=1, V=brightness
+  const c = brightness;
+  const x = c * (1 - Math.abs((hue / 60) % 2 - 1));
+  const m = 0;
+  let r, g, b;
+  if (hue < 60)       { r = c; g = x; b = 0; }
+  else if (hue < 120) { r = x; g = c; b = 0; }
+  else if (hue < 180) { r = 0; g = c; b = x; }
+  else if (hue < 240) { r = 0; g = x; b = c; }
+  else if (hue < 300) { r = x; g = 0; b = c; }
+  else                { r = c; g = 0; b = x; }
+  return `rgb(${Math.floor((r+m)*255)},${Math.floor((g+m)*255)},${Math.floor((b+m)*255)})`;
+}
+
+// Compute CWT returning both magnitude and phase arrays
+function computeCWTFull(signal, scales, omega0, N) {
+  N = N || signal.length;
+  const mag = [];
+  const phase = [];
+  for (let si = 0; si < scales.length; si++) {
+    const a = scales[si];
+    const magRow = new Float32Array(N);
+    const phaseRow = new Float32Array(N);
+    const halfW = Math.min(Math.floor(a * 6), Math.floor(N / 2));
+    const norm = 1 / Math.sqrt(a);
+    for (let b = 0; b < N; b++) {
+      let re = 0, im = 0;
+      for (let k = -halfW; k <= halfW; k++) {
+        const idx = b + k;
+        if (idx < 0 || idx >= signal.length) continue;
+        const t = k / a;
+        const w = morletComplex(t, omega0);
+        const s = signal[idx];
+        re += s * w.re;
+        im += s * w.im;
+      }
+      re *= norm;
+      im *= norm;
+      magRow[b] = Math.sqrt(re * re + im * im);
+      phaseRow[b] = Math.atan2(im, re);
+    }
+    mag.push(magRow);
+    phase.push(phaseRow);
+  }
+  return { mag, phase };
 }
 
 // Radix-2 FFT (in-place, complex arrays)
@@ -1441,9 +1519,11 @@ function computeCWT(signal, scales, omega0, N) {
     const hop = Math.floor(winSize / 4);
     const numFrames = Math.max(1, Math.floor((N - winSize) / hop) + 1);
     const numBins = Math.floor(winSize / 2);
-    const result = [];
+    const magData = [];
+    const phaseData = [];
     for (let f = 0; f < numFrames; f++) {
-      const row = new Float32Array(numBins);
+      const magRow = new Float32Array(numBins);
+      const phaseRow = new Float32Array(numBins);
       for (let k = 0; k < numBins; k++) {
         let re = 0, im = 0;
         for (let n = 0; n < winSize; n++) {
@@ -1453,11 +1533,13 @@ function computeCWT(signal, scales, omega0, N) {
           re += s * Math.cos(-2 * Math.PI * k * n / winSize);
           im += s * Math.sin(-2 * Math.PI * k * n / winSize);
         }
-        row[k] = Math.sqrt(re * re + im * im);
+        magRow[k] = Math.sqrt(re * re + im * im);
+        phaseRow[k] = Math.atan2(im, re);
       }
-      result.push(row);
+      magData.push(magRow);
+      phaseData.push(phaseRow);
     }
-    return { data: result, numFrames, numBins };
+    return { data: magData, phaseData, numFrames, numBins };
   }
 
   function draw() {
@@ -1470,6 +1552,8 @@ function computeCWT(signal, scales, omega0, N) {
     const winSize = parseInt(windowSelect.value);
     const sig = generateChirp(speed);
 
+    const showPhase = displayMode.cwtStftMode === 'phase';
+
     // STFT
     const stft = computeSTFT(sig, winSize);
     let maxS = 0;
@@ -1479,7 +1563,9 @@ function computeCWT(signal, scales, omega0, N) {
     const numScales = 40;
     const scales = [];
     for (let i = 0; i < numScales; i++) scales.push(2 + i * 1.5);
-    const cwt = computeCWT(sig, scales, 5, N);
+    const cwtFull = computeCWTFull(sig, scales, 5, N);
+    const cwt = cwtFull.mag;
+    const cwtPhase = cwtFull.phase;
     let maxC = 0;
     cwt.forEach(row => row.forEach(v => { if (v > maxC) maxC = v; }));
 
@@ -1513,7 +1599,9 @@ function computeCWT(signal, scales, omega0, N) {
     for (let f = 0; f < stft.numFrames; f++) {
       for (let k = 0; k < stft.numBins; k++) {
         const v = stft.data[f][k] / (maxS || 1);
-        ctx.fillStyle = magmaColor(Math.pow(v, 0.5));
+        ctx.fillStyle = showPhase
+          ? phaseColor(stft.phaseData[f][k], Math.pow(v, 0.5))
+          : magmaColor(Math.pow(v, 0.5));
         ctx.fillRect(f * stftCellW, plotY + plotH - (k + 1) * stftCellH, stftCellW + 1, stftCellH + 1);
       }
     }
@@ -1524,7 +1612,9 @@ function computeCWT(signal, scales, omega0, N) {
     for (let si = 0; si < numScales; si++) {
       for (let b = 0; b < N; b++) {
         const v = cwt[si][b] / (maxC || 1);
-        ctx.fillStyle = magmaColor(Math.pow(v, 0.5));
+        ctx.fillStyle = showPhase
+          ? phaseColor(cwtPhase[si][b], Math.pow(v, 0.5))
+          : magmaColor(Math.pow(v, 0.5));
         ctx.fillRect(hw + 20 + b * cwtCellW, plotY + si * cwtCellH, cwtCellW + 1, cwtCellH + 1);
       }
     }
@@ -1748,6 +1838,7 @@ function computeCWT(signal, scales, omega0, N) {
 
   let currentSig = makeSignal('piano');
   let cwtData = null;
+  let cwtPhaseData = null;
   let animRow = 0;
   let animId = null;
 
@@ -1758,6 +1849,7 @@ function computeCWT(signal, scales, omega0, N) {
     const W = canvas.parentElement.getBoundingClientRect().width;
     const H = 400;
     const ctx = fitCanvas(canvas);
+    const showPhase = displayMode.scalogramMode === 'phase';
 
     const waveH = 80;
     const plotY = waveH + 5;
@@ -1789,7 +1881,9 @@ function computeCWT(signal, scales, omega0, N) {
         if (!cwtData[si]) continue;
         for (let b = 0; b < N; b++) {
           const v = cwtData[si][b] / (maxC || 1);
-          ctx.fillStyle = magmaColor(Math.pow(v, 0.6));
+          ctx.fillStyle = (showPhase && cwtPhaseData && cwtPhaseData[si])
+            ? phaseColor(cwtPhaseData[si][b], Math.pow(v, 0.6))
+            : magmaColor(Math.pow(v, 0.6));
           ctx.fillRect(b * cellW, plotY + si * cellH, cellW + 1, cellH + 1);
         }
       }
@@ -1875,12 +1969,14 @@ function computeCWT(signal, scales, omega0, N) {
     if (animId) cancelAnimationFrame(animId);
     currentSig = makeSignal(sigSelect.value);
     cwtData = [];
+    cwtPhaseData = [];
     animRow = 0;
 
     function step() {
       if (animRow < numScales) {
         const a = scales[animRow];
         const row = new Float32Array(N);
+        const phaseRow = new Float32Array(N);
         for (let b = 0; b < N; b++) {
           let re = 0, im = 0;
           const halfW = Math.min(Math.floor(a * 5), Math.floor(N / 2));
@@ -1892,9 +1988,14 @@ function computeCWT(signal, scales, omega0, N) {
             re += currentSig[idx] * w.re;
             im += currentSig[idx] * w.im;
           }
-          row[b] = Math.sqrt(re * re + im * im) / Math.sqrt(a);
+          const norm = 1 / Math.sqrt(a);
+          re *= norm;
+          im *= norm;
+          row[b] = Math.sqrt(re * re + im * im);
+          phaseRow[b] = Math.atan2(im, re);
         }
         cwtData[animRow] = row;
+        cwtPhaseData[animRow] = phaseRow;
         animRow++;
         drawFrame();
         animId = requestAnimationFrame(step);
@@ -2020,7 +2121,10 @@ function computeCWT(signal, scales, omega0, N) {
     for (let i = 0; i < numScales; i++) {
       scales.push(aMin + (aMax - aMin) * i / (numScales - 1));
     }
-    const cwt = computeCWT(sig, scales, omega0, N);
+    const cwtFull = computeCWTFull(sig, scales, omega0, N);
+    const cwt = cwtFull.mag;
+    const cwtPhase = cwtFull.phase;
+    const showPhase = displayMode.ridgeMode === 'phase';
 
     let maxC = 0;
     cwt.forEach(r => r.forEach(v => { if (v > maxC) maxC = v; }));
@@ -2051,7 +2155,9 @@ function computeCWT(signal, scales, omega0, N) {
     for (let si = 0; si < numScales; si++) {
       for (let b = 0; b < N; b++) {
         const v = cwt[si][b] / (maxC || 1);
-        ctx.fillStyle = magmaColor(Math.pow(v, 0.6));
+        ctx.fillStyle = showPhase
+          ? phaseColor(cwtPhase[si][b], Math.pow(v, 0.6))
+          : magmaColor(Math.pow(v, 0.6));
         ctx.fillRect(b * cellW, plotY + si * cellH, cellW + 1, cellH + 1);
       }
     }
@@ -2335,7 +2441,10 @@ function computeCWT(signal, scales, omega0, N) {
 
     const scales = [];
     for (let i = 0; i < numScales; i++) scales.push(1.5 + i * 1.5);
-    const cwt = computeCWT(currentSig, scales, omega0, N);
+    const cwtFull = computeCWTFull(currentSig, scales, omega0, N);
+    const cwt = cwtFull.mag;
+    const cwtPhase = cwtFull.phase;
+    const showPhase = displayMode.transientMode === 'phase';
 
     let maxC = 0;
     cwt.forEach(r => r.forEach(v => { if (v > maxC) maxC = v; }));
@@ -2362,7 +2471,9 @@ function computeCWT(signal, scales, omega0, N) {
     for (let si = 0; si < numScales; si++) {
       for (let b = 0; b < N; b++) {
         const v = cwt[si][b] / (maxC || 1);
-        ctx.fillStyle = magmaColor(Math.pow(v, 0.6));
+        ctx.fillStyle = showPhase
+          ? phaseColor(cwtPhase[si][b], Math.pow(v, 0.6))
+          : magmaColor(Math.pow(v, 0.6));
         ctx.fillRect(b * cellW, plotY + si * cellH, cellW + 1, cellH + 1);
       }
     }
@@ -2682,7 +2793,10 @@ function computeCWT(signal, scales, omega0, N) {
 
     const scales = [];
     for (let i = 0; i < numScales; i++) scales.push(1.5 + i * 1.5);
-    const cwt = computeCWT(sig, scales, omega0, N);
+    const cwtFull = computeCWTFull(sig, scales, omega0, N);
+    const cwt = cwtFull.mag;
+    const cwtPhase = cwtFull.phase;
+    const showPhase = displayMode.filterMode === 'phase';
 
     let maxC = 0;
     cwt.forEach(r => r.forEach(v => { if (v > maxC) maxC = v; }));
@@ -2698,7 +2812,9 @@ function computeCWT(signal, scales, omega0, N) {
     for (let si = 0; si < numScales; si++) {
       for (let b = 0; b < N; b++) {
         const v = cwt[si][b] / (maxC || 1);
-        ctx.fillStyle = magmaColor(Math.pow(v, 0.6));
+        ctx.fillStyle = showPhase
+          ? phaseColor(cwtPhase[si][b], Math.pow(v, 0.6))
+          : magmaColor(Math.pow(v, 0.6));
         ctx.fillRect(b * cellW, si * cellH, cellW + 1, cellH + 1);
       }
     }
@@ -2723,7 +2839,11 @@ function computeCWT(signal, scales, omega0, N) {
           const evolve = Math.max(0, Math.min(1, (b - rampS) / (rampE - rampS)));
           v *= (1 - evolve);
         }
-        ctx.fillStyle = v > 0.001 ? magmaColor(Math.pow(v, 0.6)) : '#08090d';
+        if (showPhase) {
+          ctx.fillStyle = v > 0.001 ? phaseColor(cwtPhase[si][b], Math.pow(v, 0.6)) : '#08090d';
+        } else {
+          ctx.fillStyle = v > 0.001 ? magmaColor(Math.pow(v, 0.6)) : '#08090d';
+        }
         ctx.fillRect(b * cellW, botY + si * cellH, cellW + 1, cellH + 1);
       }
     }
@@ -2910,7 +3030,9 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   }
   const scales = [];
   for (let i = 0; i < numScales; i++) scales.push(2 + i * 1.5);
-  const cwt = computeCWT(sig, scales, omega0, N);
+  const cwtFull = computeCWTFull(sig, scales, omega0, N);
+  const cwt = cwtFull.mag;
+  const cwtPhase = cwtFull.phase;
   let maxC = 0;
   cwt.forEach(r => r.forEach(v => { if (v > maxC) maxC = v; }));
 
@@ -2924,6 +3046,7 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     const W = canvas.parentElement.getBoundingClientRect().width;
     const H = 280;
     const ctx = fitCanvas(canvas);
+    const showPhase = displayMode.probeMode === 'phase';
 
     probeSi = parseInt(scaleSlider.value);
     scaleVal.textContent = `scale ${probeSi} (a=${scales[probeSi].toFixed(1)})`;
@@ -2941,7 +3064,9 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     for (let si = 0; si < numScales; si++) {
       for (let b = 0; b < N; b++) {
         const v = cwt[si][b] / (maxC || 1);
-        ctx.fillStyle = magmaColor(Math.pow(v, 0.6));
+        ctx.fillStyle = showPhase
+          ? phaseColor(cwtPhase[si][b], Math.pow(v, 0.6))
+          : magmaColor(Math.pow(v, 0.6));
         ctx.fillRect(b * cellW, plotY + si * cellH, cellW + 1, cellH + 1);
       }
     }

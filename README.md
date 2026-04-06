@@ -43,6 +43,7 @@ The Marseille group's ongoing influence, from PRISM laboratory to modern signal 
 ## Technical Details
 
 * **Zero dependencies.** No npm, no bundler, no external libraries. All rendering uses the HTML Canvas API. Audio uses the Web Audio API.
+* **Phase display.** Every CWT scalogram has a Magnitude/Phase toggle — switch to phase view to see the cyclic phase structure of wavelet coefficients, with brightness modulated by magnitude.
 * **All maths computed in real-time.** CWT scalograms, Morlet wavelets, ridge extraction, and spectral analysis are calculated on the fly in the browser.
 * **Audio playback.** Every signal can be listened to via the Web Audio API — synthesised on demand, not pre-recorded.
 * **Responsive.** Canvases scale with DPR for sharp rendering on Retina/HiDPI displays.
