@@ -720,6 +720,9 @@ details[open] summary::before{transform:rotate(90deg)}
       <div class="wtab" data-wt="notelet">Notelet</div>
     </div>
     <canvas id="waveletFamily" height="240" style="height:240px"></canvas>
+    <div class="controls">
+      <span class="display-toggle" data-target="waveletFamilyMode"><button class="active" data-mode="real">Real part</button><button data-mode="complex">Real + Imaginary</button><button data-mode="magphase">|ψ| + ∠ψ</button></span>
+    </div>
     <div class="viz-caption" id="waveletFamilyCaption">Morlet: complex Gaussian-modulated sinusoid — analytic, constant-Q, the natural choice for audio</div>
   </div>
 </section>
@@ -3507,21 +3510,24 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   });
 
   function waveletSample(type, t, omega0) {
+    // Returns {re, im} for complex wavelets
     switch (type) {
-      case 'morlet':
-        return Math.pow(Math.PI, -0.25) * Math.exp(-t * t / 2) * Math.cos(omega0 * t);
+      case 'morlet': {
+        const env = Math.pow(Math.PI, -0.25) * Math.exp(-t * t / 2);
+        return { re: env * Math.cos(omega0 * t), im: env * Math.sin(omega0 * t) };
+      }
       case 'mexhat': {
         const g = Math.exp(-t * t / 2);
-        return (1 - t * t) * g * 2 / Math.sqrt(3); // Normalized
+        return { re: (1 - t * t) * g * 2 / Math.sqrt(3), im: 0 };
       }
       case 'gabor':
-        return Math.exp(-t * t / 2) * Math.cos(omega0 * t) * 0.8;
+        return { re: Math.exp(-t * t / 2) * Math.cos(omega0 * t) * 0.8, im: 0 };
       case 'notelet': {
         const env = t > -1 ? Math.exp(-t * t / 1.5) * (t > -2 ? 1 : 0) : 0;
-        return env * Math.sin(omega0 * t);
+        return { re: env * Math.sin(omega0 * t), im: 0 };
       }
     }
-    return 0;
+    return { re: 0, im: 0 };
   }
 
   function draw() {
@@ -3530,21 +3536,31 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     const ctx = fitCanvas(canvas);
     const N = 512;
     const omega0 = 5;
+    const mode = displayMode.waveletFamilyMode || 'real';
 
     ctx.fillStyle = '#0a0b0f';
     ctx.fillRect(0, 0, W, H);
 
-    // Time-domain (left 55%)
-    const tw = W * 0.55;
-    const samples = new Float32Array(N);
+    // Compute wavelet samples (complex)
+    const sampRe = new Float32Array(N);
+    const sampIm = new Float32Array(N);
+    const sampMag = new Float32Array(N);
+    const sampPhase = new Float32Array(N);
     let maxV = 0;
     for (let i = 0; i < N; i++) {
       const t = (i / N - 0.5) * 12;
-      samples[i] = waveletSample(activeType, t, omega0);
-      if (Math.abs(samples[i]) > maxV) maxV = Math.abs(samples[i]);
+      const s = waveletSample(activeType, t, omega0);
+      sampRe[i] = s.re;
+      sampIm[i] = s.im;
+      sampMag[i] = Math.sqrt(s.re * s.re + s.im * s.im);
+      sampPhase[i] = Math.atan2(s.im, s.re);
+      if (sampMag[i] > maxV) maxV = sampMag[i];
     }
 
-    // Envelope
+    // Time-domain (left 55%)
+    const tw = W * 0.55;
+
+    // Envelope (shown in all modes)
     ctx.strokeStyle = 'rgba(232,164,74,0.4)';
     ctx.lineWidth = 1;
     ctx.setLineDash([3, 3]);
@@ -3568,15 +3584,62 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    ctx.strokeStyle = '#4a9de8';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    for (let i = 0; i < N; i++) {
-      const x = (i / N) * tw;
-      const y = H / 2 - (samples[i] / (maxV || 1)) * H * 0.38;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    if (mode === 'real') {
+      // Real part only
+      ctx.strokeStyle = '#4a9de8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < N; i++) {
+        const x = (i / N) * tw;
+        const y = H / 2 - (sampRe[i] / (maxV || 1)) * H * 0.38;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    } else if (mode === 'complex') {
+      // Real + imaginary
+      ctx.strokeStyle = '#4a9de8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < N; i++) {
+        const x = (i / N) * tw;
+        const y = H / 2 - (sampRe[i] / (maxV || 1)) * H * 0.38;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.strokeStyle = '#e85a7a';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let i = 0; i < N; i++) {
+        const x = (i / N) * tw;
+        const y = H / 2 - (sampIm[i] / (maxV || 1)) * H * 0.38;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    } else {
+      // Magnitude + phase
+      ctx.strokeStyle = '#e8a44a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < N; i++) {
+        const x = (i / N) * tw;
+        const y = H / 2 - (sampMag[i] / (maxV || 1)) * H * 0.38;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      // Phase (scaled to ±π → ±0.38*H), dimmed where magnitude is small
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      let started = false;
+      for (let i = 0; i < N; i++) {
+        const x = (i / N) * tw;
+        const relMag = sampMag[i] / (maxV || 1);
+        if (relMag < 0.02) { started = false; continue; }
+        const y = H / 2 - (sampPhase[i] / Math.PI) * H * 0.35;
+        if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = '#5ce89a';
+      ctx.stroke();
     }
-    ctx.stroke();
 
     // Zero line
     ctx.strokeStyle = '#2a2d3a';
@@ -3585,7 +3648,7 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     ctx.moveTo(0, H/2); ctx.lineTo(tw, H/2);
     ctx.stroke();
 
-    // Frequency domain (right 45%)
+    // Frequency domain (right 45%) — always show Fourier magnitude
     const fw = W * 0.43;
     const fx0 = W * 0.57;
     const F = 200;
@@ -3596,8 +3659,8 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
       let re = 0, im = 0;
       for (let i = 0; i < N; i++) {
         const t = (i / N - 0.5) * 12;
-        re += samples[i] * Math.cos(omega * t) * (12 / N);
-        im += samples[i] * Math.sin(omega * t) * (12 / N);
+        re += sampRe[i] * Math.cos(omega * t) * (12 / N);
+        im += sampRe[i] * Math.sin(omega * t) * (12 / N);
       }
       freqMag[k] = Math.sqrt(re * re + im * im);
       if (freqMag[k] > maxFM) maxFM = freqMag[k];
@@ -3623,16 +3686,29 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     // Labels
     ctx.fillStyle = '#8a8d9a';
     ctx.font = '10px monospace';
-    ctx.fillText('Time domain', 5, 12);
+    const modeLabel = mode === 'complex' ? 'Time domain (Re + Im)' :
+                      mode === 'magphase' ? 'Time domain (|ψ| + ∠ψ)' : 'Time domain';
+    ctx.fillText(modeLabel, 5, 12);
     ctx.fillText('Frequency domain', fx0 + 4, 12);
-    ctx.fillText(activeType === 'morlet' ? 'ψ(t) = Gaussian × cos(ω₀t)' :
-                 activeType === 'mexhat' ? 'ψ(t) = (1−t²)exp(−t²/2)' :
-                 activeType === 'gabor'  ? 'ψ(t) = exp(−t²/2)cos(ω₀t)' :
-                 'ψ(t) = onset-weighted sinusoid', 5, H - 5);
+    // Legend
+    if (mode === 'complex') {
+      ctx.fillStyle = '#4a9de8'; ctx.fillText('Re', 5, H - 5);
+      ctx.fillStyle = '#e85a7a'; ctx.fillText('Im', 30, H - 5);
+    } else if (mode === 'magphase') {
+      ctx.fillStyle = '#e8a44a'; ctx.fillText('|ψ|', 5, H - 5);
+      ctx.fillStyle = '#5ce89a'; ctx.fillText('∠ψ', 30, H - 5);
+    } else {
+      ctx.fillStyle = '#8a8d9a';
+      ctx.fillText(activeType === 'morlet' ? 'ψ(t) = Gaussian × cos(ω₀t)' :
+                   activeType === 'mexhat' ? 'ψ(t) = (1−t²)exp(−t²/2)' :
+                   activeType === 'gabor'  ? 'ψ(t) = exp(−t²/2)cos(ω₀t)' :
+                   'ψ(t) = onset-weighted sinusoid', 5, H - 5);
+    }
   }
 
   draw();
   window.addEventListener('resize', draw);
+  displayMode._bindRedraw('waveletFamilyMode', draw);
 })();
 
 // ── CHAPTER 7: Proper wavelet time-stretch (replace audio) ─────
