@@ -134,7 +134,7 @@ p{margin-bottom:1.2em}
   border-radius:4px;
   overflow:hidden;
 }
-.viz canvas{display:block;width:100%;cursor:crosshair}
+.viz canvas{display:block;cursor:crosshair}
 .viz-caption{
   font-size:.8rem;color:var(--fg-dim);
   padding:.6em 1em;
@@ -1136,13 +1136,12 @@ const DPR = window.devicePixelRatio || 1;
 function setupCanvas(canvas, w, h) {
   const pw = Math.round(w);
   const ph = Math.round(h);
-  const needsResize = canvas.width !== pw * DPR || canvas.height !== ph * DPR;
-  if (needsResize) {
-    canvas.width = pw * DPR;
-    canvas.height = ph * DPR;
-    canvas.style.width = pw + 'px';
-    canvas.style.height = ph + 'px';
-  }
+  const bw = pw * DPR;
+  const bh = ph * DPR;
+  if (canvas.width !== bw) canvas.width = bw;
+  if (canvas.height !== bh) canvas.height = bh;
+  canvas.style.width = pw + 'px';
+  canvas.style.height = ph + 'px';
   const ctx = canvas.getContext('2d');
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   return ctx;
