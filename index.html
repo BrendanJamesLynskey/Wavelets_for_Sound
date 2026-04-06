@@ -808,9 +808,24 @@ details[open] summary::before{transform:rotate(90deg)}
 <section id="ch5">
   <h2><span class="num">5</span>Wavelet Synthesis — From Analysis Back to Sound</h2>
   <p class="lead">
-    The reconstruction formula means any modification to the wavelet coefficients
-    produces a valid transformed sound. Kronland-Martinet exploited this for
+    The reconstruction formula can be applied to modified wavelet coefficients
+    to produce a transformed sound — but not every modification is legitimate.
+    Kronland-Martinet exploited carefully chosen manipulations for
     additive resynthesis using extracted instantaneous amplitude and frequency.
+  </p>
+
+  <p>
+    A crucial subtlety: the CWT maps signals from $L^2(\mathbb{R})$ into a
+    <em>reproducing kernel Hilbert space</em> — a proper subspace of $L^2(\mathbb{R}^2)$.
+    Not every function on the time-scale half-plane is the CWT of a real signal;
+    valid coefficients must satisfy an internal consistency governed by the
+    reproducing kernel $K(a,b;\,a',b') = \langle \psi_{a,b},\,\psi_{a',b'}\rangle$.
+    Arbitrarily modified coefficients generally fall outside this subspace.
+    Applying the reconstruction formula still yields <em>some</em> signal, but the
+    inverse implicitly projects back onto the valid subspace, potentially
+    distorting the intended transformation. Kronland-Martinet emphasised
+    that for a given reconstruction kernel, not all transforms are admissible —
+    the modification must respect the structure of the representation.
   </p>
 
   <p>
@@ -896,7 +911,11 @@ details[open] summary::before{transform:rotate(90deg)}
   <p class="lead">
     Kronland-Martinet's 1988 Computer Music Journal paper demonstrated four
     ground-breaking sound transformations, all performed by manipulating
-    wavelet coefficients before reconstruction.
+    wavelet coefficients before reconstruction. Because the CWT representation
+    is highly redundant, these modifications must be chosen with care — as
+    discussed above, arbitrary changes to coefficients may not respect the
+    reproducing kernel, and the reconstruction will silently project the
+    result back onto the space of valid transforms.
   </p>
 
   <h3>Time-stretching without pitch change</h3>
@@ -935,8 +954,11 @@ details[open] summary::before{transform:rotate(90deg)}
 
   <h3>Time-varying filtering</h3>
   <p>
-    Zeroing out wavelet coefficients at selected scales effectively removes those frequency
-    bands from the signal. Because the filtering is done in the time-scale plane,
+    Zeroing out wavelet coefficients at selected scales approximately removes those frequency
+    bands from the signal — though the result is not strictly the CWT of any signal
+    (it violates the reproducing kernel), the reconstruction projects it onto
+    the nearest valid transform, which in practice gives a good bandpass effect.
+    Because the filtering is done in the time-scale plane,
     it can vary over time — for instance, removing high frequencies only during the sustain
     while preserving the full-bandwidth attack.
   </p>
