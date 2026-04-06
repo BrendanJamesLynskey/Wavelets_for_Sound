@@ -1144,14 +1144,20 @@ function setupCanvas(canvas, w, h) {
 }
 
 function fitCanvas(canvas) {
+  const h = parseInt(canvas.getAttribute('height')) || 350;
+  if (_skipCanvasResize && canvas._lastW) {
+    // Reuse cached dimensions — avoids layout thrashing on non-resize redraws
+    return setupCanvas(canvas, canvas._lastW, h);
+  }
   const rect = canvas.parentElement.getBoundingClientRect();
   const w = rect.width;
-  const h = parseInt(canvas.getAttribute('height')) || 350;
+  canvas._lastW = w;
   return setupCanvas(canvas, w, h);
 }
 
 // Display mode state (magnitude vs phase) per visualization
 const displayMode = {};
+let _skipCanvasResize = false;
 document.addEventListener('click', function(e) {
   const btn = e.target.closest('.display-toggle button');
   if (!btn) return;
@@ -1160,8 +1166,10 @@ document.addEventListener('click', function(e) {
   toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   displayMode[key] = btn.dataset.mode;
-  // Trigger redraw via custom event (not resize — that causes layout side-effects)
+  // Redraw without re-measuring layout (avoids layout thrashing in Chrome)
+  _skipCanvasResize = true;
   window.dispatchEvent(new Event('displayModeChange'));
+  _skipCanvasResize = false;
 });
 
 // Color maps
