@@ -538,7 +538,7 @@ details[open] summary::before{transform:rotate(90deg)}
   </p>
 
   <div class="viz">
-    <canvas id="cwtVsStft" height="350"></canvas>
+    <canvas id="cwtVsStft" height="350" style="height:350px"></canvas>
     <div class="controls">
       <label>Chirp speed <input type="range" id="chirpSpeed" min="1" max="10" value="5"></label>
       <label>Window
@@ -561,7 +561,7 @@ details[open] summary::before{transform:rotate(90deg)}
     coefficient is computed at that position and scale.
   </p>
   <div class="viz">
-    <canvas id="waveletProbe" height="280"></canvas>
+    <canvas id="waveletProbe" height="280" style="height:280px"></canvas>
     <div class="controls">
       <label>Scale <input type="range" id="probeScale" min="0" max="39" value="15" step="1"> <span id="probeScaleVal">scale 15</span></label>
       <span class="display-toggle" data-target="probeMode"><button class="active" data-mode="magnitude">Magnitude</button><button data-mode="phase">Phase</button></span>
@@ -640,7 +640,7 @@ details[open] summary::before{transform:rotate(90deg)}
     The difference lies in <em>how</em> that uncertainty is distributed across frequencies.
   </p>
   <div class="viz">
-    <canvas id="heisenbergBoxes" height="280"></canvas>
+    <canvas id="heisenbergBoxes" height="280" style="height:280px"></canvas>
     <div class="controls">
       <label>Animate <input type="checkbox" id="heisbergAnimate" checked></label>
       <button id="heisenbergToggle">Toggle STFT / CWT</button>
@@ -654,7 +654,7 @@ details[open] summary::before{transform:rotate(90deg)}
     whether its Fourier transform decays correctly and its mean is zero.
   </p>
   <div class="viz">
-    <canvas id="admissibility" height="260"></canvas>
+    <canvas id="admissibility" height="260" style="height:260px"></canvas>
     <div class="controls">
       <label>ω₀ <input type="range" id="admOmega" min="0" max="8" value="5" step="0.5"> <span id="admOmegaVal">5.0</span></label>
       <label>Bandwidth <input type="range" id="admBw" min="0.3" max="3" value="1" step="0.1"> <span id="admBwVal">1.0</span></label>
@@ -686,7 +686,7 @@ details[open] summary::before{transform:rotate(90deg)}
 
   <h3>Interactive: Explore the Morlet wavelet</h3>
   <div class="viz">
-    <canvas id="morletExplorer" height="300"></canvas>
+    <canvas id="morletExplorer" height="300" style="height:300px"></canvas>
     <div class="controls">
       <label>ω₀ <input type="range" id="morletOmega" min="2" max="12" value="5" step="0.5"> <span id="morletOmegaVal">5.0</span></label>
       <label>Scale a <input type="range" id="morletScale" min="0.3" max="5" value="1" step="0.1"> <span id="morletScaleVal">1.0</span></label>
@@ -723,7 +723,7 @@ details[open] summary::before{transform:rotate(90deg)}
       <div class="wtab" data-wt="gabor">Gabor (real)</div>
       <div class="wtab" data-wt="notelet">Notelet</div>
     </div>
-    <canvas id="waveletFamily" height="240"></canvas>
+    <canvas id="waveletFamily" height="240" style="height:240px"></canvas>
     <div class="viz-caption" id="waveletFamilyCaption">Morlet: complex Gaussian-modulated sinusoid — analytic, constant-Q, the natural choice for audio</div>
   </div>
 </section>
@@ -748,7 +748,7 @@ details[open] summary::before{transform:rotate(90deg)}
   </p>
 
   <div class="viz">
-    <canvas id="scalogramBuilder" height="400"></canvas>
+    <canvas id="scalogramBuilder" height="400" style="height:400px"></canvas>
     <div class="controls">
       <label>Signal
         <select id="scalogramSignal">
@@ -791,7 +791,7 @@ details[open] summary::before{transform:rotate(90deg)}
   </p>
 
   <div class="viz">
-    <canvas id="ridgeExtraction" height="300"></canvas>
+    <canvas id="ridgeExtraction" height="300" style="height:300px"></canvas>
     <div class="controls">
       <label>Vibrato rate <input type="range" id="vibratoRate" min="2" max="12" value="5" step="0.5"> <span id="vibratoRateVal">5.0 Hz</span></label>
       <label>Vibrato depth <input type="range" id="vibratoDepth" min="0" max="80" value="30"> <span id="vibratoDepthVal">30 Hz</span></label>
@@ -838,7 +838,7 @@ details[open] summary::before{transform:rotate(90deg)}
 
   <h3>Interactive: Additive resynthesis from wavelet analysis</h3>
   <div class="viz">
-    <canvas id="resynthesis" height="350"></canvas>
+    <canvas id="resynthesis" height="350" style="height:350px"></canvas>
     <div class="controls">
       <label>Partials <input type="range" id="numPartials" min="1" max="16" value="8"> <span id="numPartialsVal">8</span></label>
       <label>Decay rate <input type="range" id="decayRate" min="1" max="20" value="8"> <span id="decayRateVal">8</span></label>
@@ -878,7 +878,7 @@ details[open] summary::before{transform:rotate(90deg)}
 
   <h3>Interactive: Transient detection</h3>
   <div class="viz">
-    <canvas id="transientDetect" height="350"></canvas>
+    <canvas id="transientDetect" height="350" style="height:350px"></canvas>
     <div class="controls">
       <label>Signal
         <select id="transientSignal">
@@ -927,7 +927,7 @@ details[open] summary::before{transform:rotate(90deg)}
   </p>
 
   <div class="viz">
-    <canvas id="timeStretch" height="250"></canvas>
+    <canvas id="timeStretch" height="250" style="height:250px"></canvas>
     <div class="controls">
       <label>Stretch factor <input type="range" id="stretchFactor" min="0.5" max="3" value="1" step="0.1"> <span id="stretchFactorVal">1.0×</span></label>
       <button id="playOrigStretch">♪ Original</button>
@@ -943,7 +943,7 @@ details[open] summary::before{transform:rotate(90deg)}
   </p>
 
   <div class="viz">
-    <canvas id="pitchShift" height="250"></canvas>
+    <canvas id="pitchShift" height="250" style="height:250px"></canvas>
     <div class="controls">
       <label>Semitones <input type="range" id="pitchSemitones" min="-12" max="12" value="0" step="1"> <span id="pitchSemitonesVal">0 st</span></label>
       <button id="playOrigPitch">♪ Original</button>
@@ -964,7 +964,7 @@ details[open] summary::before{transform:rotate(90deg)}
   </p>
 
   <div class="viz">
-    <canvas id="waveletFilter" height="300"></canvas>
+    <canvas id="waveletFilter" height="300" style="height:300px"></canvas>
     <div class="controls">
       <label>Filter
         <select id="filterType">
@@ -993,7 +993,7 @@ details[open] summary::before{transform:rotate(90deg)}
   </p>
 
   <div class="viz">
-    <canvas id="crossSynth" height="300"></canvas>
+    <canvas id="crossSynth" height="300" style="height:300px"></canvas>
     <div class="controls">
       <label>Magnitude from
         <select id="crossSynthA">
@@ -1051,7 +1051,7 @@ details[open] summary::before{transform:rotate(90deg)}
 
   <h3>Interactive: Denoise a noisy musical signal</h3>
   <div class="viz">
-    <canvas id="denoising" height="320"></canvas>
+    <canvas id="denoising" height="320" style="height:320px"></canvas>
     <div class="controls">
       <label>Signal
         <select id="denoiseSignal">
@@ -1134,16 +1134,12 @@ details[open] summary::before{transform:rotate(90deg)}
 const DPR = window.devicePixelRatio || 1;
 
 function setupCanvas(canvas, w, h) {
-  const pw = Math.round(w);
-  const ph = Math.round(h);
-  const bw = Math.round(pw * DPR);
-  const bh = Math.round(ph * DPR);
-  if (canvas.width !== bw) canvas.width = bw;
-  if (canvas.height !== bh) canvas.height = bh;
-  canvas.style.width = pw + 'px';
-  canvas.style.height = ph + 'px';
+  canvas.width = w * DPR;
+  canvas.height = h * DPR;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
   const ctx = canvas.getContext('2d');
-  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.scale(DPR, DPR);
   return ctx;
 }
 
