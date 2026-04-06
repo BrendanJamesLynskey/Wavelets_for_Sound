@@ -1134,12 +1134,17 @@ details[open] summary::before{transform:rotate(90deg)}
 const DPR = window.devicePixelRatio || 1;
 
 function setupCanvas(canvas, w, h) {
-  canvas.width = w * DPR;
-  canvas.height = h * DPR;
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
+  const pw = Math.round(w);
+  const ph = Math.round(h);
+  const needsResize = canvas.width !== pw * DPR || canvas.height !== ph * DPR;
+  if (needsResize) {
+    canvas.width = pw * DPR;
+    canvas.height = ph * DPR;
+    canvas.style.width = pw + 'px';
+    canvas.style.height = ph + 'px';
+  }
   const ctx = canvas.getContext('2d');
-  ctx.scale(DPR, DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   return ctx;
 }
 
