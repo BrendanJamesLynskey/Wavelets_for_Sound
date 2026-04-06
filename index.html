@@ -1144,20 +1144,19 @@ function setupCanvas(canvas, w, h) {
 }
 
 function fitCanvas(canvas) {
-  const h = parseInt(canvas.getAttribute('height')) || 350;
-  if (_skipCanvasResize && canvas._lastW) {
-    // Reuse cached dimensions — avoids layout thrashing on non-resize redraws
-    return setupCanvas(canvas, canvas._lastW, h);
-  }
   const rect = canvas.parentElement.getBoundingClientRect();
   const w = rect.width;
-  canvas._lastW = w;
+  const h = parseInt(canvas.getAttribute('height')) || 350;
   return setupCanvas(canvas, w, h);
 }
 
-// Display mode state (magnitude vs phase) per visualization
-const displayMode = {};
-let _skipCanvasResize = false;
+// Display mode state (magnitude vs phase) per visualization.
+// Each viz registers its redraw callback via displayMode._bindRedraw(key, fn).
+// Toggling only redraws the single affected canvas — no global events.
+const displayMode = {
+  _callbacks: {},
+  _bindRedraw: function(key, fn) { this._callbacks[key] = fn; }
+};
 document.addEventListener('click', function(e) {
   const btn = e.target.closest('.display-toggle button');
   if (!btn) return;
@@ -1166,10 +1165,8 @@ document.addEventListener('click', function(e) {
   toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   displayMode[key] = btn.dataset.mode;
-  // Redraw without re-measuring layout (avoids layout thrashing in Chrome)
-  _skipCanvasResize = true;
-  window.dispatchEvent(new Event('displayModeChange'));
-  _skipCanvasResize = false;
+  // Redraw only the affected visualization
+  if (displayMode._callbacks[key]) displayMode._callbacks[key]();
 });
 
 // Color maps
@@ -1670,7 +1667,7 @@ function computeCWT(signal, scales, omega0, N) {
   speedSlider.addEventListener('input', draw);
   windowSelect.addEventListener('change', draw);
   window.addEventListener('resize', draw);
-  window.addEventListener('displayModeChange', draw);
+  displayMode._bindRedraw('cwtStftMode', draw);
 
   playBtn.addEventListener('click', () => {
     const speed = parseFloat(speedSlider.value);
@@ -2101,7 +2098,7 @@ function computeCWT(signal, scales, omega0, N) {
     playBuffer(samples, sr);
   });
   window.addEventListener('resize', drawFrame);
-  window.addEventListener('displayModeChange', drawFrame);
+  displayMode._bindRedraw('scalogramMode', drawFrame);
 })();
 
 // ── CHAPTER 4: Ridge Extraction ────────────────────────────────
@@ -2260,7 +2257,7 @@ function computeCWT(signal, scales, omega0, N) {
   rateSlider.addEventListener('input', draw);
   depthSlider.addEventListener('input', draw);
   window.addEventListener('resize', draw);
-  window.addEventListener('displayModeChange', draw);
+  displayMode._bindRedraw('ridgeMode', draw);
 
   playBtn.addEventListener('click', () => {
     const sr = 44100;
@@ -2538,7 +2535,7 @@ function computeCWT(signal, scales, omega0, N) {
   buildBtn.addEventListener('click', drawAnalysis);
   sigSelect.addEventListener('change', drawAnalysis);
   window.addEventListener('resize', drawAnalysis);
-  window.addEventListener('displayModeChange', drawAnalysis);
+  displayMode._bindRedraw('transientMode', drawAnalysis);
 
   playBtn.addEventListener('click', () => {
     const sr = 44100;
@@ -2907,7 +2904,7 @@ function computeCWT(signal, scales, omega0, N) {
   filterSelect.addEventListener('change', draw);
   cutoffSlider.addEventListener('input', draw);
   window.addEventListener('resize', draw);
-  window.addEventListener('displayModeChange', draw);
+  displayMode._bindRedraw('filterMode', draw);
 
   function makeFilteredSound(doFilter) {
     const sr = 44100;
@@ -3154,7 +3151,7 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   draw();
   scaleSlider.addEventListener('input', draw);
   window.addEventListener('resize', draw);
-  window.addEventListener('displayModeChange', draw);
+  displayMode._bindRedraw('probeMode', draw);
 
   function getProbeX(e) {
     const rect = canvas.getBoundingClientRect();
