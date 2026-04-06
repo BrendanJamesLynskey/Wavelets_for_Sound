@@ -1590,9 +1590,15 @@ function computeCWT(signal, scales, omega0, N) {
     const numScales = 40;
     const scales = [];
     for (let i = 0; i < numScales; i++) scales.push(2 + i * 1.5);
-    const cwtFull = computeCWTFull(sig, scales, 5, N);
-    const cwt = cwtFull.mag;
-    const cwtPhase = cwtFull.phase;
+    let cwt, cwtPhase;
+    if (showPhase) {
+      const cwtFull = computeCWTFull(sig, scales, 5, N);
+      cwt = cwtFull.mag;
+      cwtPhase = cwtFull.phase;
+    } else {
+      cwt = computeCWT(sig, scales, 5, N);
+      cwtPhase = null;
+    }
     let maxC = 0;
     cwt.forEach(row => row.forEach(v => { if (v > maxC) maxC = v; }));
 
@@ -1997,14 +2003,16 @@ function computeCWT(signal, scales, omega0, N) {
     if (animId) cancelAnimationFrame(animId);
     currentSig = makeSignal(sigSelect.value);
     cwtData = [];
-    cwtPhaseData = [];
+    cwtPhaseData = null;
     animRow = 0;
+    const needPhase = displayMode.scalogramMode === 'phase';
+    if (needPhase) cwtPhaseData = [];
 
     function step() {
       if (animRow < numScales) {
         const a = scales[animRow];
         const row = new Float32Array(N);
-        const phaseRow = new Float32Array(N);
+        const phaseRow = needPhase ? new Float32Array(N) : null;
         for (let b = 0; b < N; b++) {
           let re = 0, im = 0;
           const halfW = Math.min(Math.floor(a * 5), Math.floor(N / 2));
@@ -2016,14 +2024,11 @@ function computeCWT(signal, scales, omega0, N) {
             re += currentSig[idx] * w.re;
             im += currentSig[idx] * w.im;
           }
-          const norm = 1 / Math.sqrt(a);
-          re *= norm;
-          im *= norm;
-          row[b] = Math.sqrt(re * re + im * im);
-          phaseRow[b] = Math.atan2(im, re);
+          row[b] = Math.sqrt(re * re + im * im) / Math.sqrt(a);
+          if (phaseRow) phaseRow[b] = Math.atan2(im, re);
         }
         cwtData[animRow] = row;
-        cwtPhaseData[animRow] = phaseRow;
+        if (phaseRow) cwtPhaseData[animRow] = phaseRow;
         animRow++;
         drawFrame();
         animId = requestAnimationFrame(step);
@@ -2150,10 +2155,16 @@ function computeCWT(signal, scales, omega0, N) {
     for (let i = 0; i < numScales; i++) {
       scales.push(aMin + (aMax - aMin) * i / (numScales - 1));
     }
-    const cwtFull = computeCWTFull(sig, scales, omega0, N);
-    const cwt = cwtFull.mag;
-    const cwtPhase = cwtFull.phase;
     const showPhase = displayMode.ridgeMode === 'phase';
+    let cwt, cwtPhase;
+    if (showPhase) {
+      const cwtFull = computeCWTFull(sig, scales, omega0, N);
+      cwt = cwtFull.mag;
+      cwtPhase = cwtFull.phase;
+    } else {
+      cwt = computeCWT(sig, scales, omega0, N);
+      cwtPhase = null;
+    }
 
     let maxC = 0;
     cwt.forEach(r => r.forEach(v => { if (v > maxC) maxC = v; }));
@@ -2471,10 +2482,16 @@ function computeCWT(signal, scales, omega0, N) {
 
     const scales = [];
     for (let i = 0; i < numScales; i++) scales.push(1.5 + i * 1.5);
-    const cwtFull = computeCWTFull(currentSig, scales, omega0, N);
-    const cwt = cwtFull.mag;
-    const cwtPhase = cwtFull.phase;
     const showPhase = displayMode.transientMode === 'phase';
+    let cwt, cwtPhase;
+    if (showPhase) {
+      const cwtFull = computeCWTFull(currentSig, scales, omega0, N);
+      cwt = cwtFull.mag;
+      cwtPhase = cwtFull.phase;
+    } else {
+      cwt = computeCWT(currentSig, scales, omega0, N);
+      cwtPhase = null;
+    }
 
     let maxC = 0;
     cwt.forEach(r => r.forEach(v => { if (v > maxC) maxC = v; }));
@@ -2824,10 +2841,16 @@ function computeCWT(signal, scales, omega0, N) {
 
     const scales = [];
     for (let i = 0; i < numScales; i++) scales.push(1.5 + i * 1.5);
-    const cwtFull = computeCWTFull(sig, scales, omega0, N);
-    const cwt = cwtFull.mag;
-    const cwtPhase = cwtFull.phase;
     const showPhase = displayMode.filterMode === 'phase';
+    let cwt, cwtPhase;
+    if (showPhase) {
+      const cwtFull = computeCWTFull(sig, scales, omega0, N);
+      cwt = cwtFull.mag;
+      cwtPhase = cwtFull.phase;
+    } else {
+      cwt = computeCWT(sig, scales, omega0, N);
+      cwtPhase = null;
+    }
 
     let maxC = 0;
     cwt.forEach(r => r.forEach(v => { if (v > maxC) maxC = v; }));
@@ -3062,9 +3085,8 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   }
   const scales = [];
   for (let i = 0; i < numScales; i++) scales.push(2 + i * 1.5);
-  const cwtFull = computeCWTFull(sig, scales, omega0, N);
-  const cwt = cwtFull.mag;
-  const cwtPhase = cwtFull.phase;
+  const cwt = computeCWT(sig, scales, omega0, N);
+  let cwtPhase = null;
   let maxC = 0;
   cwt.forEach(r => r.forEach(v => { if (v > maxC) maxC = v; }));
 
@@ -3079,6 +3101,10 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     const H = 280;
     const ctx = fitCanvas(canvas);
     const showPhase = displayMode.probeMode === 'phase';
+    if (showPhase && !cwtPhase) {
+      const full = computeCWTFull(sig, scales, omega0, N);
+      cwtPhase = full.phase;
+    }
 
     probeSi = parseInt(scaleSlider.value);
     scaleVal.textContent = `scale ${probeSi} (a=${scales[probeSi].toFixed(1)})`;
