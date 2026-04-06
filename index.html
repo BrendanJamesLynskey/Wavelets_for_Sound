@@ -641,11 +641,7 @@ details[open] summary::before{transform:rotate(90deg)}
   </p>
   <div class="viz">
     <canvas id="heisenbergBoxes" height="280" style="height:280px"></canvas>
-    <div class="controls">
-      <label>Animate <input type="checkbox" id="heisbergAnimate" checked></label>
-      <button id="heisenbergToggle">Toggle STFT / CWT</button>
-    </div>
-    <div class="viz-caption">Time-frequency plane: each rectangle shows the "cell" of uncertainty for one analysis atom. STFT = fixed boxes; CWT = boxes that widen at low frequencies and narrow at high.</div>
+    <div class="viz-caption">Left: STFT — fixed-size tiles at all frequencies · Right: CWT — wide tiles (good frequency resolution) at low frequencies, narrow tiles (good time resolution) at high frequencies</div>
   </div>
 
   <h3>Interactive: Admissibility Condition Explorer</h3>
@@ -3226,18 +3222,10 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   canvas.addEventListener('touchend', () => { dragging = false; });
 })();
 
-// ── CHAPTER 2: Heisenberg Boxes ────────────────────────────────
+// ── CHAPTER 2: Heisenberg Boxes (static side-by-side) ──────────
 (function heisenbergViz() {
   const canvas = document.getElementById('heisenbergBoxes');
   if (!canvas) return;
-  const animCheck = document.getElementById('heisbergAnimate');
-  const toggleBtn = document.getElementById('heisenbergToggle');
-
-  let showCWT = false;
-  let animT = 0;
-  let raf = null;
-
-  toggleBtn.addEventListener('click', () => { showCWT = !showCWT; draw(); });
 
   function draw() {
     const W = canvas.parentElement.getBoundingClientRect().width;
@@ -3247,87 +3235,93 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
     ctx.fillStyle = '#0a0b0f';
     ctx.fillRect(0, 0, W, H);
 
-    const padL = 50, padB = 30, padT = 15, padR = 10;
-    const pw = W - padL - padR;
-    const ph = H - padT - padB;
-
-    // Axes
-    ctx.strokeStyle = '#2a2d3a';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + ph);
-    ctx.lineTo(padL + pw, padT + ph);
-    ctx.stroke();
-
-    ctx.fillStyle = '#8a8d9a';
-    ctx.font = '10px monospace';
-    ctx.fillText('Time →', padL + pw - 40, padT + ph + 20);
-    ctx.save(); ctx.translate(12, padT + ph/2); ctx.rotate(-Math.PI/2);
-    ctx.fillText('Frequency →', -40, 0);
-    ctx.restore();
-
+    const gap = 20;
+    const hw = (W - gap) / 2;
+    const padL = 40, padB = 25, padT = 25, padR = 5;
     const numFreqs = 6;
     const numTimes = 8;
 
-    if (!showCWT) {
-      // STFT: fixed rectangular boxes
-      const bw = pw / numTimes;
-      const bh = ph / numFreqs;
-      for (let f = 0; f < numFreqs; f++) {
-        for (let t = 0; t < numTimes; t++) {
-          const x = padL + t * bw + 2;
-          const y = padT + (numFreqs - 1 - f) * bh + 2;
-          const alpha = 0.3 + 0.15 * Math.sin(animT + f * 0.5 + t * 0.3);
-          ctx.fillStyle = `rgba(74,157,232,${alpha})`;
-          ctx.fillRect(x, y, bw - 4, bh - 4);
-          ctx.strokeStyle = 'rgba(74,157,232,0.6)';
-          ctx.lineWidth = 1;
-          ctx.strokeRect(x, y, bw - 4, bh - 4);
+    // Draw one panel (axes + boxes)
+    function drawPanel(x0, mode) {
+      const pw = hw - padL - padR;
+      const ph = H - padT - padB;
+
+      // Axes
+      ctx.strokeStyle = '#2a2d3a';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x0 + padL, padT);
+      ctx.lineTo(x0 + padL, padT + ph);
+      ctx.lineTo(x0 + padL + pw, padT + ph);
+      ctx.stroke();
+
+      ctx.fillStyle = '#8a8d9a';
+      ctx.font = '9px monospace';
+      ctx.fillText('Time →', x0 + padL + pw - 35, padT + ph + 16);
+      ctx.save();
+      ctx.translate(x0 + 10, padT + ph / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText('Freq →', -25, 0);
+      ctx.restore();
+
+      if (mode === 'stft') {
+        const bw = pw / numTimes;
+        const bh = ph / numFreqs;
+        for (let f = 0; f < numFreqs; f++) {
+          for (let t = 0; t < numTimes; t++) {
+            const x = x0 + padL + t * bw + 2;
+            const y = padT + (numFreqs - 1 - f) * bh + 2;
+            ctx.fillStyle = 'rgba(74,157,232,0.3)';
+            ctx.fillRect(x, y, bw - 4, bh - 4);
+            ctx.strokeStyle = 'rgba(74,157,232,0.6)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x, y, bw - 4, bh - 4);
+          }
         }
-      }
-      ctx.fillStyle = '#4a9de8';
-      ctx.font = '11px monospace';
-      ctx.fillText('STFT — fixed resolution at all frequencies', padL + 5, padT + 12);
-    } else {
-      // CWT: boxes that scale with frequency (wider at low freq, narrower at high)
-      for (let f = 0; f < numFreqs; f++) {
-        const freqFrac = (f + 0.5) / numFreqs;
-        const boxH = (ph / numFreqs) * 0.85;
-        const logScale = 1 / (freqFrac * 2 + 0.3);
-        const boxW = Math.min(pw * 0.25 * logScale, pw / numTimes * 2.5);
-        const centerFreqY = padT + (numFreqs - 1 - f) * (ph / numFreqs) + (ph / numFreqs) / 2;
-        const numT = Math.max(2, Math.floor(pw / boxW));
-        for (let t = 0; t < numT; t++) {
-          const cx = padL + (t + 0.5) * (pw / numT);
-          const x = cx - boxW / 2 + 1;
-          const y = centerFreqY - boxH / 2 + 1;
-          const alpha = 0.25 + 0.15 * Math.sin(animT + f * 0.7 + t * 0.4);
-          const hue = 30 + f * 20;
-          ctx.fillStyle = `hsla(${hue},70%,55%,${alpha})`;
-          ctx.fillRect(x, y, boxW - 2, boxH - 2);
-          ctx.strokeStyle = `hsla(${hue},70%,65%,0.7)`;
-          ctx.lineWidth = 1;
-          ctx.strokeRect(x, y, boxW - 2, boxH - 2);
+        ctx.fillStyle = '#4a9de8';
+        ctx.font = '11px monospace';
+        ctx.fillText('STFT — fixed resolution', x0 + padL + 5, padT - 6);
+      } else {
+        for (let f = 0; f < numFreqs; f++) {
+          const freqFrac = (f + 0.5) / numFreqs;
+          const boxH = (ph / numFreqs) * 0.85;
+          const logScale = 1 / (freqFrac * 2 + 0.3);
+          const boxW = Math.min(pw * 0.25 * logScale, pw / numTimes * 2.5);
+          const centerY = padT + (numFreqs - 1 - f) * (ph / numFreqs) + (ph / numFreqs) / 2;
+          const numT = Math.max(2, Math.floor(pw / boxW));
+          for (let t = 0; t < numT; t++) {
+            const cx = x0 + padL + (t + 0.5) * (pw / numT);
+            const x = cx - boxW / 2 + 1;
+            const y = centerY - boxH / 2 + 1;
+            const hue = 30 + f * 20;
+            ctx.fillStyle = `hsla(${hue},70%,55%,0.3)`;
+            ctx.fillRect(x, y, boxW - 2, boxH - 2);
+            ctx.strokeStyle = `hsla(${hue},70%,65%,0.7)`;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x, y, boxW - 2, boxH - 2);
+          }
         }
+        ctx.fillStyle = '#e8a44a';
+        ctx.font = '11px monospace';
+        ctx.fillText('CWT — adaptive resolution', x0 + padL + 5, padT - 6);
       }
-      ctx.fillStyle = '#e8a44a';
-      ctx.font = '11px monospace';
-      ctx.fillText('CWT — wide boxes (good freq res) at low freq, narrow (good time res) at high', padL + 5, padT + 12);
     }
 
-    animT += 0.025;
-    if (animCheck.checked) raf = requestAnimationFrame(draw);
+    drawPanel(0, 'stft');
+
+    // Divider
+    ctx.strokeStyle = '#2a2d3a';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(hw + gap / 2, 10);
+    ctx.lineTo(hw + gap / 2, H - 10);
+    ctx.stroke();
+
+    drawPanel(hw + gap, 'cwt');
   }
 
-  function start() {
-    if (raf) cancelAnimationFrame(raf);
-    draw();
-  }
-  animCheck.addEventListener('change', () => {
-    if (animCheck.checked) start();
-  });
-  start();
-  window.addEventListener('resize', start);
+  draw();
+  window.addEventListener('resize', draw);
 })();
 
 // ── CHAPTER 2: Admissibility Explorer ─────────────────────────
