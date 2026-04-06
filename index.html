@@ -1883,6 +1883,29 @@ function computeCWT(signal, scales, omega0, N) {
     const ctx = fitCanvas(canvas);
     const showPhase = displayMode.scalogramMode === 'phase';
 
+    // Compute phase data lazily if toggled after build completed
+    if (showPhase && !cwtPhaseData && cwtData && cwtData.length === numScales) {
+      cwtPhaseData = [];
+      for (let si = 0; si < numScales; si++) {
+        const a = scales[si];
+        const phaseRow = new Float32Array(N);
+        for (let b = 0; b < N; b++) {
+          let re = 0, im = 0;
+          const halfW = Math.min(Math.floor(a * 5), Math.floor(N / 2));
+          for (let k = -halfW; k <= halfW; k++) {
+            const idx = b + k;
+            if (idx < 0 || idx >= N) continue;
+            const t = k / a;
+            const w = morletComplex(t, omega0);
+            re += currentSig[idx] * w.re;
+            im += currentSig[idx] * w.im;
+          }
+          phaseRow[b] = Math.atan2(im, re);
+        }
+        cwtPhaseData[si] = phaseRow;
+      }
+    }
+
     const waveH = 80;
     const plotY = waveH + 5;
     const plotH = H - plotY;
