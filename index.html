@@ -1141,7 +1141,10 @@ function setupCanvas(canvas, w, h) {
 function fitCanvas(canvas) {
   const rect = canvas.parentElement.getBoundingClientRect();
   const w = rect.width;
-  const h = parseInt(canvas.getAttribute('height')) || 350;
+  // Read display height from inline style, not getAttribute('height') —
+  // setting canvas.height (the buffer) also mutates the HTML attribute,
+  // so getAttribute returns the DPR-scaled buffer size on subsequent calls.
+  const h = parseInt(canvas.style.height) || parseInt(canvas.getAttribute('height')) || 350;
   return setupCanvas(canvas, w, h);
 }
 
