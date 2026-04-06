@@ -1130,10 +1130,8 @@ details[open] summary::before{transform:rotate(90deg)}
 const DPR = window.devicePixelRatio || 1;
 
 function setupCanvas(canvas, w, h) {
-  w = Math.floor(w);
-  canvas.width = w * DPR;
-  canvas.height = h * DPR;
-  canvas.style.width = w + 'px';
+  canvas.width = Math.round(w * DPR);
+  canvas.height = Math.round(h * DPR);
   canvas.style.height = h + 'px';
   const ctx = canvas.getContext('2d');
   ctx.scale(DPR, DPR);
@@ -1142,7 +1140,7 @@ function setupCanvas(canvas, w, h) {
 
 function fitCanvas(canvas) {
   const rect = canvas.parentElement.getBoundingClientRect();
-  const w = Math.floor(rect.width);
+  const w = rect.width;
   const h = parseInt(canvas.getAttribute('height')) || 350;
   return setupCanvas(canvas, w, h);
 }
