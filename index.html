@@ -1138,8 +1138,8 @@ document.addEventListener('click', function(e) {
   toggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   displayMode[key] = btn.dataset.mode;
-  // Trigger redraw by dispatching a resize (all visualizations listen for it)
-  window.dispatchEvent(new Event('resize'));
+  // Trigger redraw via custom event (not resize — that causes layout side-effects)
+  window.dispatchEvent(new Event('displayModeChange'));
 });
 
 // Color maps
@@ -1640,6 +1640,7 @@ function computeCWT(signal, scales, omega0, N) {
   speedSlider.addEventListener('input', draw);
   windowSelect.addEventListener('change', draw);
   window.addEventListener('resize', draw);
+  window.addEventListener('displayModeChange', draw);
 
   playBtn.addEventListener('click', () => {
     const speed = parseFloat(speedSlider.value);
@@ -2070,6 +2071,7 @@ function computeCWT(signal, scales, omega0, N) {
     playBuffer(samples, sr);
   });
   window.addEventListener('resize', drawFrame);
+  window.addEventListener('displayModeChange', drawFrame);
 })();
 
 // ── CHAPTER 4: Ridge Extraction ────────────────────────────────
@@ -2228,6 +2230,7 @@ function computeCWT(signal, scales, omega0, N) {
   rateSlider.addEventListener('input', draw);
   depthSlider.addEventListener('input', draw);
   window.addEventListener('resize', draw);
+  window.addEventListener('displayModeChange', draw);
 
   playBtn.addEventListener('click', () => {
     const sr = 44100;
@@ -2505,6 +2508,7 @@ function computeCWT(signal, scales, omega0, N) {
   buildBtn.addEventListener('click', drawAnalysis);
   sigSelect.addEventListener('change', drawAnalysis);
   window.addEventListener('resize', drawAnalysis);
+  window.addEventListener('displayModeChange', drawAnalysis);
 
   playBtn.addEventListener('click', () => {
     const sr = 44100;
@@ -2873,6 +2877,7 @@ function computeCWT(signal, scales, omega0, N) {
   filterSelect.addEventListener('change', draw);
   cutoffSlider.addEventListener('input', draw);
   window.addEventListener('resize', draw);
+  window.addEventListener('displayModeChange', draw);
 
   function makeFilteredSound(doFilter) {
     const sr = 44100;
@@ -3119,6 +3124,7 @@ function waveletTimeStretchAudio(signal, factor, omega0) {
   draw();
   scaleSlider.addEventListener('input', draw);
   window.addEventListener('resize', draw);
+  window.addEventListener('displayModeChange', draw);
 
   function getProbeX(e) {
     const rect = canvas.getBoundingClientRect();
