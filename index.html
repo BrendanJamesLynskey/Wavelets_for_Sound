@@ -1095,8 +1095,100 @@ details[open] summary::before{transform:rotate(90deg)}
     would change signal processing forever.
   </p>
 
+  <h3>After Marseille — where wavelets went</h3>
   <p>
-    The key publications from this collaboration remain foundational reading:
+    The Marseille papers were the seed. What grew from them, in just a decade,
+    reshaped applied mathematics and pushed wavelets into almost every corner of
+    signal processing:
+  </p>
+
+  <div class="timeline">
+    <div class="timeline-item">
+      <div class="timeline-year">1988</div>
+      <div class="timeline-text">
+        <strong>Ingrid Daubechies</strong> constructs the first family of
+        <em>orthonormal compactly supported wavelets</em> (Comm. Pure Appl. Math. 41).
+        The continuous transform of Marseille acquires a discrete, critically-sampled
+        cousin with perfect reconstruction — the DWT.
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-year">1989</div>
+      <div class="timeline-text">
+        <strong>Stéphane Mallat</strong> introduces <em>multiresolution analysis</em>
+        and the fast pyramidal DWT algorithm (IEEE PAMI 11), recasting the
+        wavelet transform as a two-channel quadrature-mirror filter bank.
+        The DWT becomes computable in $O(N)$ — faster than the FFT.
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-year">1990</div>
+      <div class="timeline-text">
+        <strong>Yves Meyer</strong>, Albert Cohen and Daubechies develop
+        biorthogonal wavelets and characterise smooth orthonormal bases.
+        Meyer's 1992 monograph <em>Wavelets and Operators</em> cements the field;
+        he wins the Abel Prize in 2017 for this body of work.
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-year">1993</div>
+      <div class="timeline-text">
+        The <strong>FBI</strong> adopts a wavelet scalar quantisation standard (WSQ)
+        for its 200 million-print fingerprint archive — 15:1 compression with
+        minuscule loss of forensic detail.
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-year">2000</div>
+      <div class="timeline-text">
+        <strong>JPEG 2000</strong> standardises image compression around a
+        biorthogonal Cohen–Daubechies–Feauveau 9/7 wavelet. Wavelets become
+        the default for high-end imaging (cinema, medical, satellite).
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-year">2012</div>
+      <div class="timeline-text">
+        Mallat's <strong>wavelet scattering transform</strong> (Comm. Pure Appl. Math. 65)
+        — a hand-designed deep network built from wavelet moduli — shows that
+        translation-invariant, stable representations can be engineered rather than learned.
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-year">2015–16</div>
+      <div class="timeline-text">
+        <strong>LIGO</strong> uses wavelet-based transient detection
+        (Coherent WaveBurst, Omega/Q-transform glitch classification) alongside
+        matched filtering in the first direct detection of gravitational waves.
+        Morlet's analysis tool listens to colliding black holes.
+      </div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-year">Today</div>
+      <div class="timeline-text">
+        Wavelets live inside audio codecs, ECG and EEG analysis, seismic imaging,
+        high-dynamic-range video, neural scattering networks, turbulence simulation,
+        and Gaia/Euclid astronomical pipelines. The <em>Continuous Wavelet Transform</em>
+        remains the tool of choice wherever non-stationary signals and musical
+        time–frequency structure meet.
+      </div>
+    </div>
+  </div>
+
+  <h3>Related guides</h3>
+  <p>
+    The story told here has two close cousins. The
+    <a href="https://github.com/BrendanJamesLynskey/STFT_for_Sound" target="_blank">Short-Time Fourier Transform</a>
+    is the wavelet's uniform-resolution predecessor — Gabor's 1946 atoms, Allen &amp; Rabiner's
+    analysis–synthesis framework, and the phase vocoder. The
+    <a href="https://github.com/BrendanJamesLynskey/Constant_Q_Transform_for_Sound" target="_blank">Constant-Q Transform</a>
+    is a different route to the same insight as the CWT: variable-length windows whose
+    bandwidth scales with frequency so that each musical semitone lands in its own bin.
+  </p>
+
+  <p>
+    The key publications from the Marseille collaboration and its direct descendants
+    remain foundational reading:
   </p>
 
   <div class="references">
@@ -1109,6 +1201,11 @@ details[open] summary::before{transform:rotate(90deg)}
       <li>Kronland-Martinet, R. (1988). <em>The Use of the Wavelet Transform for the Analysis, Synthesis and Processing of Speech and Music Sounds.</em> Computer Music Journal, MIT Press, 12(4), 11–20.</li>
       <li>Grossmann, A., Kronland-Martinet, R. & Morlet, J. (1989). <em>Reading and Understanding Continuous Wavelet Transforms.</em> In Combes, Grossmann & Tchamitchian (Eds.), Wavelets, Springer.</li>
       <li>Kronland-Martinet, R. & Grossmann, A. (1990). <em>Application of Time-Frequency and Time-Scale Methods to the Analysis, Synthesis and Transformation of Natural Sounds.</em> In Roads, De Poli & Picciali (Eds.), Representations of Musical Signals, MIT Press.</li>
+      <li>Daubechies, I. (1988). <em>Orthonormal Bases of Compactly Supported Wavelets.</em> Comm. Pure Appl. Math., 41(7), 909–996.</li>
+      <li>Mallat, S. (1989). <em>A Theory for Multiresolution Signal Decomposition: The Wavelet Representation.</em> IEEE Trans. Pattern Anal. Mach. Intell., 11(7), 674–693.</li>
+      <li>Donoho, D. L. & Johnstone, I. M. (1994). <em>Ideal Spatial Adaptation by Wavelet Shrinkage.</em> Biometrika, 81(3), 425–455.</li>
+      <li>Mallat, S. (2012). <em>Group Invariant Scattering.</em> Comm. Pure Appl. Math., 65(10), 1331–1398.</li>
+      <li>Klimenko, S. et al. (2016). <em>Method for Detection and Reconstruction of Gravitational Wave Transients with Networks of Advanced Detectors.</em> Phys. Rev. D, 93(4), 042004 — the Coherent WaveBurst wavelet-based pipeline used in LIGO's first detections.</li>
     </ol>
   </div>
 </section>

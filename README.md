@@ -36,7 +36,7 @@ Kronland-Martinet's four landmark transformations:
 - **Cross-synthesis** (magnitude from one sound, phase from another)
 
 ### 8 · Legacy and Continuing Impact
-The Marseille group's ongoing influence, from PRISM laboratory to modern signal processing. Full bibliography of key publications.
+A post-Marseille timeline — Daubechies's orthonormal wavelets (1988), Mallat's multiresolution DWT (1989), Meyer's characterisation (1990), the FBI fingerprint standard (1993), JPEG 2000, Mallat's scattering transform (2012), LIGO's wavelet-based gravitational-wave detection (2015–16). Full bibliography of key publications.
 
 ---
 
@@ -73,6 +73,13 @@ The Marseille group's ongoing influence, from PRISM laboratory to modern signal 
 7. Kronland-Martinet, R. & Grossmann, A. (1990). *Application of Time-Frequency and Time-Scale Methods to the Analysis, Synthesis and Transformation of Natural Sounds.* In Roads, De Poli & Picciali (Eds.), Representations of Musical Signals, MIT Press.
 
 ---
+
+## Related Guides
+
+Two companion guides in the same style:
+
+* [STFT for Sound](https://github.com/BrendanJamesLynskey/STFT_for_Sound) — Gabor's atoms, the phase vocoder, COLA, and Griffin–Lim reconstruction.
+* [Constant-Q Transform for Sound](https://github.com/BrendanJamesLynskey/Constant_Q_Transform_for_Sound) — Brown & Puckette's log-frequency spectrum, chromagrams, and chord recognition.
 
 ## License
 
