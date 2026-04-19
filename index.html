@@ -1177,14 +1177,16 @@ details[open] summary::before{transform:rotate(90deg)}
 
   <h3>Related guides</h3>
   <p>
-    The story told here has two close cousins. The
-    <a href="https://github.com/BrendanJamesLynskey/STFT_for_Sound" target="_blank">Short-Time Fourier Transform</a>
-    is the wavelet's uniform-resolution predecessor — Gabor's 1946 atoms, Allen &amp; Rabiner's
-    analysis–synthesis framework, and the phase vocoder. The
-    <a href="https://github.com/BrendanJamesLynskey/Constant_Q_Transform_for_Sound" target="_blank">Constant-Q Transform</a>
-    is a different route to the same insight as the CWT: variable-length windows whose
-    bandwidth scales with frequency so that each musical semitone lands in its own bin.
+    The story told here is one chapter in a larger family. Four close cousins cover
+    the rest of the audio time–frequency landscape:
   </p>
+  <ul style="padding-left:1.5em;color:var(--fg-dim);font-size:.95rem;margin-bottom:1.5em">
+    <li style="margin-bottom:.4em"><a href="https://github.com/BrendanJamesLynskey/STFT_for_Sound" target="_blank">STFT for Sound</a> — the wavelet's uniform-resolution predecessor. Gabor's atoms, Allen &amp; Rabiner's analysis–synthesis, the phase vocoder, Griffin–Lim.</li>
+    <li style="margin-bottom:.4em"><a href="https://github.com/BrendanJamesLynskey/Constant_Q_Transform_for_Sound" target="_blank">Constant-Q Transform for Sound</a> — the musician's route to constant-shape analysis; variable-length windows per semitone.</li>
+    <li style="margin-bottom:.4em"><a href="https://github.com/BrendanJamesLynskey/MDCT_for_Sound" target="_blank">MDCT for Sound</a> — the real-valued, critically-sampled, perfect-reconstruction transform inside every audio codec.</li>
+    <li style="margin-bottom:.4em"><a href="https://github.com/BrendanJamesLynskey/MFCC_for_Sound" target="_blank">MFCC for Sound</a> — Davis &amp; Mermelstein's cepstrum-based speech feature; the 30-year ASR workhorse.</li>
+    <li><a href="https://github.com/BrendanJamesLynskey/Sound_Transforms_History" target="_blank">Sound Transforms — History and Practical Guide</a> — the meta-guide covering how all five grew, where they compete, and which you should reach for for a given task.</li>
+  </ul>
 
   <p>
     The key publications from the Marseille collaboration and its direct descendants

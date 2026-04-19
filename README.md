@@ -76,10 +76,13 @@ A post-Marseille timeline — Daubechies's orthonormal wavelets (1988), Mallat's
 
 ## Related Guides
 
-Two companion guides in the same style:
+Companion guides in the same style:
 
 * [STFT for Sound](https://github.com/BrendanJamesLynskey/STFT_for_Sound) — Gabor's atoms, the phase vocoder, COLA, and Griffin–Lim reconstruction.
 * [Constant-Q Transform for Sound](https://github.com/BrendanJamesLynskey/Constant_Q_Transform_for_Sound) — Brown & Puckette's log-frequency spectrum, chromagrams, and chord recognition.
+* [MDCT for Sound](https://github.com/BrendanJamesLynskey/MDCT_for_Sound) — Princen & Bradley, TDAC, and the codec inside every MP3/AAC/Opus.
+* [MFCC for Sound](https://github.com/BrendanJamesLynskey/MFCC_for_Sound) — cepstrum, Davis & Mermelstein, and the 30-year ASR workhorse.
+* [Sound Transforms — History and Practical Guide](https://github.com/BrendanJamesLynskey/Sound_Transforms_History) — the meta-guide covering all five, with a decision tree for which to use when.
 
 ## License
 
